@@ -21,7 +21,7 @@ test('leaves VAT off when disabled and calculates partial payment balance', () =
 });
 
 test('rejects payment above sale total and invalid VAT rate', () => {
-  assert.throws(() => calculateSale({ price: 100, paid: 101 }), /exceed/);
+  assert.throws(() => calculateSale({ price: 100, vatEnabled: false, paid: 101 }), /exceed/);
   assert.throws(() => calculateSale({ price: 100, vatRate: 101 }), /allowed range/);
 });
 
