@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#162b59">
+  <meta name="description" content="A local-first dealership management prototype for Akinlowo Global Investments and Autos.">
+  <title>Akinlowo Global | Dealership desk</title>
+  <link rel="icon" href="./assets/akinlowo-global-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <a class="brand" href="#dashboard" aria-label="Akinlowo Global dashboard">
+        <img src="./assets/akinlowo-global-mark.svg" alt="" width="42" height="42">
+        <span><strong>Akinlowo Global</strong><small>dealership desk</small></span>
+      </a>
+      <p class="nav-caption">WORKSPACE</p>
+      <nav class="nav-list">
+        <a href="#dashboard" data-route="dashboard"><span class="nav-icon">◫</span>Overview</a>
+        <a href="#inventory" data-route="inventory"><span class="nav-icon">▤</span>Inventory</a>
+        <a href="#sales" data-route="sales"><span class="nav-icon">↗</span>Sales</a>
+        <a href="#finance" data-route="finance"><span class="nav-icon">₦</span>Finance</a>
+        <a href="#suppliers" data-route="suppliers"><span class="nav-icon">◎</span>Suppliers</a>
+        <a href="#documents" data-route="documents"><span class="nav-icon">▧</span>Invoices & receipts</a>
+      </nav>
+      <div class="sidebar-bottom">
+        <a href="#settings" data-route="settings"><span class="nav-icon">⚙</span>Settings</a>
+        <div class="local-note"><span class="status-dot"></span><span>Saved on this device<small>Local demo · no account sync</small></span></div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div><p class="eyebrow" id="today-label"></p><h1 id="page-title">Overview</h1></div>
+        <div class="top-actions"><span class="currency-badge">NGN <b>₦</b></span><button class="button button-primary" data-action="new-sale">＋ New sale</button></div>
+      </header>
+      <section id="view" class="page-content" aria-live="polite"></section>
+      <footer class="footer-note">Local-first prototype · figures stay in this browser · review records before relying on them</footer>
+    </main>
+  </div>
+  <dialog id="modal" class="modal"><div id="modal-content"></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
