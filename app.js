@@ -1,4 +1,5 @@
-import { formatNaira, calculateSale, nextDocumentNumber, transitionVehicleStatus, landedCost, makeId } from './core.js';
+import { formatNaira, calculateSale, nextDocumentNumber, transitionVehicleStatus, landedCost, makeId, welcomeMessage, lagosDateTime, rateFreshness, RATE_CURRENCIES, LAGOS_TIME_ZONE } from './core.js';
+import { FX_SOURCE, fetchRates, readRateCache, writeRateCache, cacheIsFresh } from './fx.js';
 
 const STORE = 'akinlowo-global-dealership-v1';
 const business = {
@@ -45,6 +46,131 @@ function chartMarkup() {
   const months=lastSixMonths(); const values=months.map(m=>state.sales.filter(s=>String(s.date).slice(0,7)===m.key).reduce((a,s)=>a+s.basePrice,0)); const max=Math.max(...values,1);
   return `<div class="chart">${months.map((m,i)=>`<div class="chart-col"><div class="bar-wrap"><span class="bar" title="Sales ${money(values[i])}" style="height:${Math.max(2,values[i]/max*100)}%"></span><span class="bar alt" title="Cash received ${money(state.sales.filter(s=>String(s.date).slice(0,7)===m.key).reduce((a,s)=>a+s.paidAmount,0))}" style="height:${Math.max(2,state.sales.filter(s=>String(s.date).slice(0,7)===m.key).reduce((a,s)=>a+s.paidAmount,0)/max*100)}%"></span></div><span class="chart-label">${m.label}</span></div>`).join('')}</div><div class="legend"><span><i></i>sale value</span><span><i class="purple"></i>cash received</span></div>`;
 }
+/* ---------- Lagos welcome ---------- */
+function ownerNameFromState() {
+  const candidates = [state?.settings?.ownerName, state?.ownerName, business?.ownerName];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+  return '';
+}
+
+function heroMarkup() {
+  const welcome = welcomeMessage(new Date(), ownerNameFromState());
+  return `<section class="hero" aria-label="Welcome">
+    <div class="hero-copy">
+      <p class="hero-kicker"><i></i>Africa/Lagos · ${escapeHtml(welcome.timeLabel)}</p>
+      <h2>${escapeHtml(welcome.title)}</h2>
+      <p class="hero-sub">${escapeHtml(welcome.subtitle)} ${welcome.name ? 'Your stock, sales and balances are summarised from records saved in this browser.' : 'Stock, sales and balances below are summarised from the records saved in this browser.'}</p>
+    </div>
+    <div class="hero-side">
+      <span class="hero-date">${escapeHtml(welcome.dateLabel)}</span>
+      <span class="hero-clock">West Africa Time · UTC+1</span>
+      <button class="hero-cta" type="button" data-action="new-sale">＋ Record a sale</button>
+    </div>
+  </section>`;
+}
+
+/* ---------- Indicative daily NGN rates ---------- */
+let rates = readRateCache();
+let ratesStatus = rates ? 'ready' : 'loading';
+let ratesError = '';
+let ratesRequest = null;
+
+const rateMoney = value => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value));
+
+function rateTimestamp(ms) {
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: LAGOS_TIME_ZONE, day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).format(new Date(ms)) + ' WAT';
+  } catch {
+    return 'time unavailable';
+  }
+}
+
+function ratesBodyMarkup() {
+  const freshness = rates ? rateFreshness({ lastUpdated: rates.lastUpdated, nextUpdate: rates.nextUpdate }) : { state: 'unavailable' };
+  const offline = ratesStatus === 'error';
+  let chipClass = '';
+  let chipText = 'Current';
+  if (!rates) {
+    chipClass = ratesStatus === 'loading' ? 'is-loading' : 'is-down';
+    chipText = ratesStatus === 'loading' ? 'Checking rates' : 'Unavailable';
+  } else if (freshness.state === 'stale') {
+    chipClass = 'is-stale';
+    chipText = 'Stale';
+  } else if (offline) {
+    chipClass = 'is-stale';
+    chipText = 'Saved copy';
+  }
+
+  const updated = rates ? rateTimestamp(rates.lastUpdated) : 'not available yet';
+  const tiles = rates
+    ? `<div class="rates-grid">${RATE_CURRENCIES.map(({ code, name }) => `<div class="rate-tile"><div class="rate-code"><span>${code}</span><span>1 ${code} → NGN</span></div><div class="rate-value">${escapeHtml(rateMoney(rates.ngn[code]))}</div><div class="rate-name">${escapeHtml(name)}</div></div>`).join('')}</div>`
+    : `<p class="small-note" style="margin:0">${ratesStatus === 'loading' ? 'Requesting the daily rate feed. Naira rates appear here when the provider responds.' : 'The daily rate feed could not be reached, so no rates are shown rather than guessed figures.'} ${offline ? escapeHtml(ratesError) : ''}</p>`;
+
+  const retry = offline || freshness.state === 'stale' || !rates
+    ? '<button class="button button-quiet button-small rates-retry" type="button" data-action="refresh-rates">Retry feed</button>'
+    : '';
+
+  return `<div class="rates-head">
+      <div class="rates-title">
+        <h2 id="rates-title">Indicative exchange rates <span class="status-chip ${chipClass}">${chipText}</span></h2>
+        <p>CAD, USD, CNY and EUR into naira, from one daily provider feed</p>
+      </div>
+      <div class="rates-meta">
+        <span class="rates-updated" aria-live="polite">Provider last updated <b>${escapeHtml(updated)}</b></span>
+        ${offline ? '<span class="rates-updated">Showing the last saved copy from this device</span>' : ''}
+        ${retry}
+      </div>
+    </div>
+    ${tiles}
+    <div class="rates-foot">
+      <span class="rates-attribution">Source: <a href="${FX_SOURCE.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(FX_SOURCE.attribution)}</a> · <a href="${FX_SOURCE.termsUrl}" target="_blank" rel="noopener noreferrer">provider terms</a></span>
+      <span>Indicative daily reference rates only — not guaranteed transaction rates.</span>
+    </div>`;
+}
+
+function ratesCardMarkup() {
+  return `<section class="card rates-card" id="rates-panel" aria-labelledby="rates-title">${ratesBodyMarkup()}</section>`;
+}
+
+function paintRates() {
+  const host = document.getElementById('rates-panel');
+  if (!host) return;
+  host.innerHTML = ratesBodyMarkup();
+}
+
+async function loadRates(force = false) {
+  if (ratesRequest) return ratesRequest;
+  if (!force && cacheIsFresh(rates)) {
+    ratesStatus = 'ready';
+    paintRates();
+    return undefined;
+  }
+  if (!rates) ratesStatus = 'loading';
+  paintRates();
+  ratesRequest = (async () => {
+    try {
+      const fresh = await fetchRates();
+      rates = fresh;
+      ratesError = '';
+      ratesStatus = 'ready';
+      writeRateCache(fresh);
+    } catch (error) {
+      ratesError = error?.message || 'The rate request failed';
+      ratesStatus = 'error';
+    } finally {
+      ratesRequest = null;
+      paintRates();
+    }
+  })();
+  return ratesRequest;
+}
+
+/* ---------- Overview ---------- */
 function renderDashboard() {
   const available=state.vehicles.filter(v=>v.status==='available').length, reserved=state.vehicles.filter(v=>v.status==='reserved').length;
   const stockValue=state.vehicles.filter(v=>v.status!=='sold').reduce((a,v)=>a+landedCost(v),0);
@@ -53,11 +179,14 @@ function renderDashboard() {
   const profit=state.sales.reduce((a,s)=>a+(s.basePrice-(landedCost(state.vehicles.find(v=>v.id===s.vehicleId)||{})+(Number(s.vehicleExpense)||0))),0);
   const recent=[...state.sales].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
   const mix=[['Available',available,'#4274c4'],['Reserved',reserved,'#9376cb'],['Sold',state.vehicles.filter(v=>v.status==='sold').length,'#4a9b78']]; const max=Math.max(...mix.map(x=>x[1]),1);
-  view.innerHTML=`<div class="grid stats-grid">${stat('Available stock',available,`${reserved} reserved · ${state.vehicles.filter(v=>v.status==='sold').length} sold`,'▤')}${stat('Inventory landed cost',money(stockValue),'Cost basis of unsold vehicles','₦')}${stat('Cash received',money(received),'Payments recorded in this browser','↗')}${stat('Outstanding balances',money(outstanding),`${state.sales.filter(s=>s.total>s.paidAmount).length} sale(s) with balance due`,'◷')}</div>
+  view.innerHTML=`${heroMarkup()}<div class="grid stats-grid">${stat('Available stock',available,`${reserved} reserved · ${state.vehicles.filter(v=>v.status==='sold').length} sold`,'▤')}${stat('Inventory landed cost',money(stockValue),'Cost basis of unsold vehicles','₦')}${stat('Cash received',money(received),'Payments recorded in this browser','↗')}${stat('Outstanding balances',money(outstanding),`${state.sales.filter(s=>s.total>s.paidAmount).length} sale(s) with balance due`,'◷')}</div>
+  ${ratesCardMarkup()}
   <div class="grid split-grid"><section class="card panel"><div class="panel-title"><h3>Sales activity</h3><span>Last 6 months · NGN</span></div>${chartMarkup()}</section><section class="card panel"><div class="panel-title"><h3>Stock position</h3><span>${state.vehicles.length} vehicle(s)</span></div><div class="mix-list">${mix.map(([label,n])=>`<div><div class="mix-row"><span>${label}</span><strong>${n}</strong></div><div class="mix-track"><span style="width:${Math.round(n/max*100)}%"></span></div></div>`).join('')}<div class="mix-row"><span>Estimated realized gross profit</span><strong>${money(profit)}</strong></div></div></section></div>
   <div class="section-head"><div><h2>Recent sales</h2><p>Sales and document balances recorded locally</p></div><button class="button button-quiet" data-route="sales">Open sales →</button></div>
   <section class="card table-card">${recent.length?`<div class="table-scroll"><table><thead><tr><th>Sale / buyer</th><th>Vehicle</th><th>Date</th><th>Total</th><th>Balance</th><th>Status</th></tr></thead><tbody>${recent.map(s=>{const v=state.vehicles.find(x=>x.id===s.vehicleId)||{};return `<tr><td class="primary-cell">${escapeHtml(s.buyerName)}<span class="secondary-cell">${escapeHtml(s.invoiceNumber)}</span></td><td>${escapeHtml(vehicleName(v))}</td><td>${escapeHtml(s.date)}</td><td class="money">${money(s.total)}</td><td class="money">${money(s.total-s.paidAmount)}</td><td>${statusPill(s.paidAmount>=s.total?'paid':s.paidAmount?'part-paid':'due')}</td></tr>`}).join('')}</tbody></table></div>`:empty('No sales recorded yet','Add a sale when you are ready to create your first invoice.', '<button class="button button-primary" data-action="new-sale">Create sale</button>')}</section>`;
+  void loadRates();
 }
+
 function renderInventory() {
   const query=(document.getElementById('inventory-search')?.value||'').toLowerCase(); const filter=document.getElementById('inventory-filter')?.value||'all';
   const rows=state.vehicles.filter(v=>(filter==='all'||v.status===filter)&&`${vehicleName(v)} ${v.vin||''} ${v.color||''}`.toLowerCase().includes(query));
@@ -93,7 +222,7 @@ function renderSettings() {
   document.getElementById('settings-form').addEventListener('submit',e=>{e.preventDefault(); const rate=Number(new FormData(e.currentTarget).get('vatRate')); if(!Number.isFinite(rate)||rate<0||rate>100){toast('Enter a VAT rate from 0 to 100');return;}state.settings.vatRate=rate;save();toast('VAT default saved');render();});
 }
 function render() {
-  document.getElementById('today-label').textContent=new Intl.DateTimeFormat('en-NG',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
+  document.getElementById('today-label').textContent=lagosDateTime(new Date()).dateLabel;
   document.getElementById('page-title').textContent=titleMap[currentRoute]||'Overview';
   document.querySelectorAll('[data-route]').forEach(a=>a.classList.toggle('active',a.dataset.route===currentRoute));
   ({dashboard:renderDashboard,inventory:renderInventory,sales:renderSales,finance:renderFinance,suppliers:renderSuppliers,documents:renderDocuments,settings:renderSettings}[currentRoute]||renderDashboard)();
@@ -104,7 +233,7 @@ function vehicleForm(vehicle={}) {
 }
 function saleForm() {
   const cars=state.vehicles.filter(v=>['available','reserved'].includes(v.status));
-  return `<form id="sale-form" class="modal-form"><h3 class="form-section-title">Select stock and buyer</h3><div class="form-grid"><div class="field full"><label>Vehicle *</label><select class="input" name="vehicleId" required>${cars.map(v=>`<option value="${v.id}">${escapeHtml(vehicleName(v))} · ${escapeHtml(v.status)} · ask ${money(v.askingPrice)}</option>`).join('')}</select>${cars.length?'':'<span class="error">No available or reserved cars. Add stock first.</span>'}</div><div class="field"><label>Buyer name *</label><input class="input" name="buyerName" required></div><div class="field"><label>Buyer phone</label><input class="input" name="buyerPhone" type="tel"></div><div class="field full"><label>Buyer address</label><input class="input" name="buyerAddress"></div><div class="field"><label>Sale date *</label><input class="input" name="date" type="date" value="${today()}" required></div><div class="field"><label>Sale price (₦) *</label><input class="input" name="price" type="number" min="0" step="0.01" required></div></div><hr class="form-divider"><h3 class="form-section-title">Payment and document</h3><div class="form-grid"><div class="field"><label class="checkbox-row"><input type="checkbox" name="vatEnabled" checked> Add VAT to this sale</label></div><div class="field"><label>VAT rate (%)</label><input class="input" name="vatRate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(state.settings.vatRate)}"></div><div class="field"><label>Amount received now (₦)</label><input class="input" name="paid" type="number" min="0" step="0.01" value="0"></div><div class="field"><label>Payment method</label><select class="input" name="paymentMethod"><option>Bank transfer</option><option>Cash</option><option>POS</option><option>Cheque</option><option>Other</option></select></div><div class="field full"><label>Sale terms</label><textarea class="input" name="terms" rows="3">Vehicle sold in the condition inspected by the buyer. Please retain this document for your records.</textarea></div><div class="field full"><label>Accessories / remarks</label><textarea class="input" name="remarks" rows="2"></textarea></div></div><p class="small-note">A numbered invoice requests the full sale amount. Any payment you enter is recorded separately and creates its own receipt. Both numbers are local to this browser.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary" ${cars.length?'':'disabled'}>Create sale & invoice</button></div></form>`;
+  return `<form id="sale-form" class="modal-form"><h3 class="form-section-title">Select stock and buyer</h3><div class="form-grid"><div class="field full"><label>Vehicle *</label><select class="input" name="vehicleId" required>${cars.map(v=>`<option value="${v.id}">${escapeHtml(vehicleName(v))} · ${escapeHtml(v.status)} · ask ${money(v.askingPrice)}</option>`).join('')}</select>${cars.length?'':'<span class="error">No available or reserved cars. Add stock first.</span>'}</div><div class="field"><label>Buyer name *</label><input class="input" name="buyerName" required></div><div class="field"><label>Buyer phone</label><input class="input" name="buyerPhone" type="tel"></div><div class="field full"><label>Buyer address</label><input class="input" name="buyerAddress"></div><div class="field"><label>Sale date *</label><input class="input" name="date" type="date" value="${today()}" required></div><div class="field"><label>Sale price (₦) *</label><input class="input" name="price" type="number" min="0" step="0.01" required></div></div><hr class="form-divider"><h3 class="form-section-title">Payment and document</h3><div class="form-grid"><div class="field"><label class="checkbox-row"><input type="checkbox" name="vatEnabled"> Add VAT to this sale (optional, off by default)</label></div><div class="field"><label>VAT rate (%)</label><input class="input" name="vatRate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(state.settings.vatRate)}"></div><div class="field"><label>Amount received now (₦)</label><input class="input" name="paid" type="number" min="0" step="0.01" value="0"></div><div class="field"><label>Payment method</label><select class="input" name="paymentMethod"><option>Bank transfer</option><option>Cash</option><option>POS</option><option>Cheque</option><option>Other</option></select></div><div class="field full"><label>Sale terms</label><textarea class="input" name="terms" rows="3">Vehicle sold in the condition inspected by the buyer. Please retain this document for your records.</textarea></div><div class="field full"><label>Accessories / remarks</label><textarea class="input" name="remarks" rows="2"></textarea></div></div><p class="small-note">A numbered invoice requests the full sale amount. Any payment you enter is recorded separately and creates its own receipt. Both numbers are local to this browser.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary" ${cars.length?'':'disabled'}>Create sale & invoice</button></div></form>`;
 }
 function expenseForm() { return `<form id="expense-form" class="modal-form"><div class="form-grid"><div class="field full"><label>Description *</label><input class="input" name="description" required></div><div class="field"><label>Category</label><select class="input" name="category"><option>Vehicle purchase</option><option>Clearing</option><option>Transport</option><option>Repairs</option><option>Office</option><option>Marketing</option><option>Other</option></select></div><div class="field"><label>Date *</label><input class="input" name="date" type="date" value="${today()}" required></div><div class="field"><label>Cash amount (₦) *</label><input class="input" name="amount" type="number" min="0" step="0.01" required></div><div class="field"><label>Input VAT included (₦)</label><input class="input" name="inputVat" type="number" min="0" step="0.01" value="0"></div><div class="field full"><label>Related vehicle (optional)</label><select class="input" name="vehicleId"><option value="">General expense</option>${state.vehicles.map(v=>`<option value="${v.id}">${escapeHtml(vehicleName(v))}</option>`).join('')}</select></div></div><p class="small-note">Enter cash amount and input VAT from your own records. This prototype does not determine tax eligibility.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary">Save expense</button></div></form>`; }
 function supplierForm() { return `<form id="supplier-form" class="modal-form"><div class="form-grid"><div class="field"><label>Supplier name *</label><input class="input" name="name" required></div><div class="field"><label>Reference / invoice number</label><input class="input" name="reference"></div><div class="field"><label>Amount due (₦) *</label><input class="input" name="amount" type="number" min="0" step="0.01" required></div><div class="field"><label>Due date</label><input class="input" name="dueDate" type="date"></div></div><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary">Save payable</button></div></form>`; }
@@ -149,6 +278,9 @@ document.addEventListener('click',e=>{
   const route=e.target.closest('[data-route]');if(route){e.preventDefault();setRoute(route.dataset.route);return;}
   const button=e.target.closest('[data-action]');if(!button)return;const {action,id}=button.dataset;
   if(action==='close-modal')closeModal();
+  if(action==='toggle-assistant')setAssistant(document.getElementById('assistant-panel')?.hidden !== false);
+  if(action==='close-assistant')setAssistant(false);
+  if(action==='refresh-rates')void loadRates(true);
   if(action==='new-sale'){if(!state.vehicles.some(v=>['available','reserved'].includes(v.status))){toast('Add an available vehicle before creating a sale');return;}openModal('Create sale & invoice','Record the vehicle sale, buyer, optional VAT and any initial payment',saleForm());}
   if(action==='add-vehicle')openModal('Add vehicle','Enter vehicle identity and purchase/operating costs in NGN',vehicleForm());
   if(action==='edit-vehicle'){const v=state.vehicles.find(v=>v.id===id);if(v)openModal('Edit vehicle','Update this stock record',vehicleForm(v));}
@@ -179,6 +311,23 @@ document.addEventListener('submit',e=>{
     if(f.id==='expense-form'){const d=new FormData(f),item=Object.fromEntries(d.entries());item.id=makeId();item.amount=Number(item.amount);item.inputVat=Number(item.inputVat||0);if(item.amount<0||item.inputVat<0||item.inputVat>item.amount)throw new Error('Check expense and input VAT amounts');state.expenses.push(item);save();closeModal();render();toast('Expense saved');}
     if(f.id==='supplier-form'){const d=new FormData(f),item=Object.fromEntries(d.entries());item.id=makeId();item.amount=Number(item.amount);item.balance=item.amount;item.payments=[];if(item.amount<=0)throw new Error('Enter a payable amount greater than zero');state.suppliers.push(item);save();closeModal();render();toast('Supplier payable saved');}
   }catch(err){const old=f.querySelector('.error-message');if(old)old.remove();const note=document.createElement('p');note.className='error error-message';note.textContent=err.message||'Could not save this record';f.append(note);}
+});
+function setAssistant(open) {
+  const panel = document.getElementById('assistant-panel');
+  const fab = document.querySelector('[data-action="toggle-assistant"]');
+  if (!panel || !fab) return;
+  panel.hidden = !open;
+  fab.setAttribute('aria-expanded', String(open));
+  if (open) panel.querySelector('[data-action="close-assistant"]')?.focus();
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setAssistant(false); });
+document.addEventListener('click', e => {
+  const panel = document.getElementById('assistant-panel');
+  if (!panel || panel.hidden) return;
+  if (e.target.closest('#assistant-panel') || e.target.closest('[data-action="toggle-assistant"]')) return;
+  if (e.target.closest('#modal')) return;
+  setAssistant(false);
 });
 modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
 window.addEventListener('hashchange',()=>{currentRoute=location.hash.slice(1)||'dashboard';render();});
