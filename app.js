@@ -1,5 +1,6 @@
 import { formatNaira, calculateSale, nextDocumentNumber, transitionVehicleStatus, landedCost, makeId, welcomeMessage, lagosDateTime, rateFreshness, RATE_CURRENCIES, LAGOS_TIME_ZONE } from './core.js';
 import { FX_SOURCE, fetchRates, readRateCache, writeRateCache, cacheIsFresh } from './fx.js';
+import { initAssistantPanel, setAssistant } from './assistant-panel.js';
 
 const STORE = 'akinlowo-global-dealership-v1';
 const business = {
@@ -312,15 +313,6 @@ document.addEventListener('submit',e=>{
     if(f.id==='supplier-form'){const d=new FormData(f),item=Object.fromEntries(d.entries());item.id=makeId();item.amount=Number(item.amount);item.balance=item.amount;item.payments=[];if(item.amount<=0)throw new Error('Enter a payable amount greater than zero');state.suppliers.push(item);save();closeModal();render();toast('Supplier payable saved');}
   }catch(err){const old=f.querySelector('.error-message');if(old)old.remove();const note=document.createElement('p');note.className='error error-message';note.textContent=err.message||'Could not save this record';f.append(note);}
 });
-function setAssistant(open) {
-  const panel = document.getElementById('assistant-panel');
-  const fab = document.querySelector('[data-action="toggle-assistant"]');
-  if (!panel || !fab) return;
-  panel.hidden = !open;
-  fab.setAttribute('aria-expanded', String(open));
-  if (open) panel.querySelector('[data-action="close-assistant"]')?.focus();
-}
-
 document.addEventListener('keydown', e => { if (e.key === 'Escape') setAssistant(false); });
 document.addEventListener('click', e => {
   const panel = document.getElementById('assistant-panel');
@@ -331,4 +323,5 @@ document.addEventListener('click', e => {
 });
 modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
 window.addEventListener('hashchange',()=>{currentRoute=location.hash.slice(1)||'dashboard';render();});
+initAssistantPanel();
 save();render();

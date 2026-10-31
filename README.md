@@ -27,7 +27,7 @@ npm test
 - A4-friendly invoice and payment receipt print views using browser print / save as PDF, business details and an original vector logo mark.
 - Expense and supplier payable ledgers, payment records, VAT summaries, gross-profit estimates and CSV export.
 - Browser `localStorage` persistence and clearly labelled fictional demo vehicles. No demo customers or real financial data are included in seed records.
-- A floating assistant button and panel that is a clearly labelled, not-connected interface shell. There is no AI service, no request is made and no record is sent anywhere.
+- A floating dealership support assistant that answers questions about using the desk (invoices, receipts, VAT, payments, stock, rates). It is gated behind a secure Supabase Edge Function and a server-side Groq key. Without a configured endpoint the panel stays open, labelled **Not configured**, and sends nothing.
 
 ## Daily NGN rates
 
@@ -41,14 +41,44 @@ Cross rates follow the provider's USD-based table only: `NGN per 1 unit = rates.
 - If the request fails, no rate is invented: the panel reports **Unavailable**, keeps the source and terms links, and offers a retry. If a saved copy exists it is shown with its real provider timestamp and labelled accordingly.
 - Rates are a display reference only. They are not used in invoices, receipts, sale totals, VAT or any other stored figure, and they are not a quote.
 
+## Dealership assistant
+
+The assistant is a real chat panel, but it is only enabled when a deployment wires it to the Supabase Edge Function in [`supabase/functions/dealership-assistant`](supabase/functions/dealership-assistant/README.md). This repository does not ship an endpoint address, a Supabase session or any key.
+
+- **No key in the browser.** The Groq key exists only as a server-side `GROQ_API_KEY` secret. Nothing key-shaped is committed, logged or sent to the client.
+- **Verified authorization.** The function rejects missing, expired or anon-key tokens by verifying the caller with `auth.getUser`, supports an optional email allowlist, and applies an origin allowlist, per-user rate limits, input caps and safe error messages.
+- **No records leave the page.** The request body is only `{ messages: [{ role, content }] }` built from the words typed in the panel. Vehicles, sales, buyers, documents and storage are never read into it, and chat history is kept in memory only.
+- **Honest states.** With no endpoint the panel says **Not configured** and the composer is disabled. A missing session says **Sign-in required**. Service failures say **Unavailable**, **Busy**, **Offline** or **Timed out** — never a fabricated answer.
+- **Scoped instructions.** The system prompt limits the assistant to this desk, forbids inventing records, forbids claiming it created, sent or printed anything, forbids asking for or repeating customer data, and requires it to admit when a question needs the person to check a screen.
+
+### Enabling it
+
+1. Deploy the function and set `GROQ_API_KEY` and `ASSISTANT_ALLOWED_ORIGINS` as project secrets. See the [function README](supabase/functions/dealership-assistant/README.md) for the full command list.
+2. Serve this app with a small runtime config placed before the `app.js` module tag:
+
+```html
+<script>
+  window.AKINLOWO_ASSISTANT = {
+    endpoint: 'https://<project-ref>.supabase.co/functions/v1/dealership-assistant',
+    getAccessToken: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null
+  };
+</script>
+```
+
+3. Sign the user in with Supabase Auth in the host page. Without a token the panel stays in **Sign-in required**.
+
+Local QA without a Supabase account or Groq key: `node dev/assistant-mock-server.mjs` runs the real request pipeline against a stubbed provider at <http://127.0.0.1:8787>.
+
 ## Akinlowo Global document identity
 
 AKINLOWO GLOBAL INVESTMENTS AND AUTOS · RC 1554770 · 27 Street B3, Kuchiyako Ext Kuje Abuja Nigeria · +234-70-3392-1599 · +234-90-1696-0025 · natureautomobiles@outlook.com. NGN/₦ is the default currency. Confirm these details and every transaction field before issuing a document.
 
 ## Prototype limits
 
-This is a local browser demo, not production accounting, tax advice, a statutory ledger or a government e-invoicing service. Records remain on one browser/device and can be lost if its storage is cleared. There is no backend, login/access control, multi-user synchronisation, external payment processing, bank reconciliation, live FX conversion, public vehicle marketplace, VIN camera scanning or cloud backup. VAT settings and calculations are editable arithmetic only and do not establish tax treatment or compliance. Use a secure production system and professional advice before relying on business records.
+This is a local browser demo, not production accounting, tax advice, a statutory ledger or a government e-invoicing service. Records remain on one browser/device and can be lost if its storage is cleared. There is no record backend, login screen inside the app, multi-user synchronisation, external payment processing, bank reconciliation, currency conversion inside invoices, public vehicle marketplace, VIN camera scanning or cloud backup. VAT settings and calculations are editable arithmetic only and do not establish tax treatment or compliance. The assistant is optional, is not deployed from this repository, cannot read or change records, and its replies can be wrong. Use a secure production system and professional advice before relying on business records.
 
 ## Tests
 
 `npm test` runs the Node test suite. It covers naira formatting, VAT and sale totals, balances and invalid payment/rate handling, document numbering, vehicle status transitions and landed-cost arithmetic; the Africa/Lagos greeting and owner-name fallback; NGN cross-rate building and rejection of missing currencies; rate freshness and stale/unavailable states; parsing the provider payload, its error responses, cache round-trip and blocked-storage handling; and that the rate request carries no credentials or record data.
+
+For the assistant it covers the system prompt's accuracy and data rules; payload validation, length and history limits; the origin allowlist with no wildcard; missing, malformed, invalid and unlisted-user sessions; method and body limits; per-user rate limiting; provider failures being mapped to safe messages without the key or provider text; the browser client's config validation, token requirement, history capping, offline/timeout handling and the fact that the outbound body contains only the conversation.

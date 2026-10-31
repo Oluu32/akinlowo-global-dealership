@@ -87,7 +87,7 @@
     </div>
   </nav>
 
-  <button class="assistant-fab" type="button" data-action="toggle-assistant" aria-expanded="false" aria-controls="assistant-panel" aria-label="Open the assistant panel (not connected)">
+  <button class="assistant-fab" type="button" data-action="toggle-assistant" aria-expanded="false" aria-controls="assistant-panel" aria-label="Open the assistant panel (not configured)">
     <span class="assistant-fab-icon" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12.2c0 3.7-3.6 6.7-8 6.7a9.3 9.3 0 0 1-2.7-.4L5 20l1-3.2a6.2 6.2 0 0 1-2-4.6c0-3.7 3.6-6.7 8-6.7s8 3 8 6.7z"/><path d="M9 11.6h.01M12 11.6h.01M15 11.6h.01"/></svg>
     </span>
@@ -99,19 +99,17 @@
       <span class="assistant-avatar" aria-hidden="true">AG</span>
       <div class="assistant-ident">
         <h2 id="assistant-title">Dealership assistant</h2>
-        <p><span class="assistant-state">Not connected</span> · interface shell only</p>
+        <p><span class="assistant-state is-off" id="assistant-status">Checking</span> <span class="assistant-status-note" id="assistant-status-note">Checking this deployment…</span></p>
       </div>
       <button class="icon-button" type="button" data-action="close-assistant" aria-label="Close assistant panel">×</button>
     </header>
-    <div class="assistant-body">
-      <p class="assistant-bubble">This is a preview of the assistant panel. No AI service is connected in this build, so no reply is written here.</p>
-      <p class="assistant-bubble assistant-bubble-muted">Nothing is sent off this device. Your vehicles, sales, suppliers, documents and every other saved record stay in this browser.</p>
-    </div>
-    <div class="assistant-compose">
-      <input class="input" type="text" placeholder="Messaging is disabled — not connected" aria-label="Message (disabled, assistant not connected)" disabled>
-      <button class="button button-primary" type="button" disabled>Send</button>
-    </div>
-    <p class="assistant-note">UI shell only · no AI backend · no inventory, sale or customer data is transmitted</p>
+    <div class="assistant-body" id="assistant-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+    <div class="assistant-suggestions" id="assistant-suggestions" aria-label="Suggested questions" hidden></div>
+    <form class="assistant-compose" id="assistant-form" autocomplete="off">
+      <textarea class="input assistant-input" id="assistant-input" name="message" rows="1" maxlength="1200" placeholder="Messaging is disabled — assistant not configured" aria-label="Message to the dealership assistant"></textarea>
+      <button class="button button-primary" id="assistant-send" type="submit" disabled>Send</button>
+    </form>
+    <p class="assistant-note" id="assistant-privacy">Only the words you type are sent to the assistant service · saved records never leave this browser · replies can be wrong, so check figures before acting</p>
   </section>
 
   <dialog id="modal" class="modal"><div id="modal-content"></div></dialog>
