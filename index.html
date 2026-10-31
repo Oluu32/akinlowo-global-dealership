@@ -101,9 +101,22 @@
         <h2 id="assistant-title">Dealership assistant</h2>
         <p><span class="assistant-state is-off" id="assistant-status">Checking</span> <span class="assistant-status-note" id="assistant-status-note">Checking this deployment…</span></p>
       </div>
+      <button class="assistant-signout" id="assistant-signout" type="button" hidden>Sign out</button>
       <button class="icon-button" type="button" data-action="close-assistant" aria-label="Close assistant panel">×</button>
     </header>
     <div class="assistant-body" id="assistant-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+    <section class="assistant-auth" id="assistant-auth" aria-label="Assistant sign-in" hidden>
+      <p class="assistant-auth-lead">Sign in to use the assistant. Your dealership records stay in this browser and are never sent with a message.</p>
+      <form class="assistant-auth-form" id="assistant-auth-form">
+        <label for="assistant-email">Email</label>
+        <input class="input" id="assistant-email" name="email" type="email" autocomplete="username" required>
+        <label for="assistant-password">Password</label>
+        <input class="input" id="assistant-password" name="password" type="password" autocomplete="current-password" required>
+        <button class="button button-primary" id="assistant-auth-submit" type="submit">Sign in</button>
+      </form>
+      <p class="assistant-auth-error" id="assistant-auth-error" role="alert" hidden></p>
+      <p class="assistant-auth-note">Accounts are managed in the dealership's Supabase project. The password goes only to that project and is never stored by this app.</p>
+    </section>
     <div class="assistant-suggestions" id="assistant-suggestions" aria-label="Suggested questions" hidden></div>
     <form class="assistant-compose" id="assistant-form" autocomplete="off">
       <textarea class="input assistant-input" id="assistant-input" name="message" rows="1" maxlength="1200" placeholder="Messaging is disabled — assistant not configured" aria-label="Message to the dealership assistant"></textarea>

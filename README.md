@@ -48,13 +48,29 @@ The assistant is a real chat panel, but it is only enabled when a deployment wir
 - **No key in the browser.** The Groq key exists only as a server-side `GROQ_API_KEY` secret. Nothing key-shaped is committed, logged or sent to the client.
 - **Verified authorization.** The function rejects missing, expired or anon-key tokens by verifying the caller with `auth.getUser`, supports an optional email allowlist, and applies an origin allowlist, per-user rate limits, input caps and safe error messages.
 - **No records leave the page.** The request body is only `{ messages: [{ role, content }] }` built from the words typed in the panel. Vehicles, sales, buyers, documents and storage are never read into it, and chat history is kept in memory only.
-- **Honest states.** With no endpoint the panel says **Not configured** and the composer is disabled. A missing session says **Sign-in required**. Service failures say **Unavailable**, **Busy**, **Offline** or **Timed out** — never a fabricated answer.
+- **Sign-in gate.** When the app is pointed at a Supabase project, the panel opens on a password sign-in form instead of the chat. The session lives in `sessionStorage` for that tab, refreshes shortly before expiry, and is cleared on sign-out or when the service rejects it. Passwords are never stored, reused or written to disk.
+- **Honest states.** With no endpoint the panel says **Not configured** and the composer is disabled. A missing or ended session says **Sign-in required**. Service failures say **Unavailable**, **Busy**, **Offline** or **Timed out** — never a fabricated answer.
 - **Scoped instructions.** The system prompt limits the assistant to this desk, forbids inventing records, forbids claiming it created, sent or printed anything, forbids asking for or repeating customer data, and requires it to admit when a question needs the person to check a screen.
 
 ### Enabling it
 
 1. Deploy the function and set `GROQ_API_KEY` and `ASSISTANT_ALLOWED_ORIGINS` as project secrets. See the [function README](supabase/functions/dealership-assistant/README.md) for the full command list.
-2. Serve this app with a small runtime config placed before the `app.js` module tag:
+2. Create dealer accounts under **Authentication → Users** in the Supabase dashboard. There is no public sign-up form in this app on purpose.
+3. Serve this app with a small runtime config placed before the `app.js` module tag:
+
+```html
+<script>
+  window.AKINLOWO_SUPABASE = {
+    url: 'https://<project-ref>.supabase.co',
+    anonKey: '<public anon / publishable key>'
+    // assistantEndpoint: optional override; derived from the project URL otherwise
+  };
+</script>
+```
+
+The panel then shows the sign-in gate, derives the function endpoint, and refreshes the session itself. The anon key is a public client key; a `service_role` or `sb_secret_…` key is rejected at startup so it cannot be shipped by mistake.
+
+A host that already manages sessions can skip the gate entirely by supplying the token itself:
 
 ```html
 <script>
@@ -65,9 +81,7 @@ The assistant is a real chat panel, but it is only enabled when a deployment wir
 </script>
 ```
 
-3. Sign the user in with Supabase Auth in the host page. Without a token the panel stays in **Sign-in required**.
-
-Local QA without a Supabase account or Groq key: `node dev/assistant-mock-server.mjs` runs the real request pipeline against a stubbed provider at <http://127.0.0.1:8787>.
+Local QA without a Supabase account or Groq key: `node dev/assistant-mock-server.mjs` runs the real request pipeline and a fake sign-in at <http://127.0.0.1:8787>. Demo credentials are `dealer@akinlowo.test` / `demo-dealer-2026`; they only exist in that local mock.
 
 ## Akinlowo Global document identity
 
@@ -75,10 +89,12 @@ AKINLOWO GLOBAL INVESTMENTS AND AUTOS · RC 1554770 · 27 Street B3, Kuchiyako E
 
 ## Prototype limits
 
-This is a local browser demo, not production accounting, tax advice, a statutory ledger or a government e-invoicing service. Records remain on one browser/device and can be lost if its storage is cleared. There is no record backend, login screen inside the app, multi-user synchronisation, external payment processing, bank reconciliation, currency conversion inside invoices, public vehicle marketplace, VIN camera scanning or cloud backup. VAT settings and calculations are editable arithmetic only and do not establish tax treatment or compliance. The assistant is optional, is not deployed from this repository, cannot read or change records, and its replies can be wrong. Use a secure production system and professional advice before relying on business records.
+This is a local browser demo, not production accounting, tax advice, a statutory ledger or a government e-invoicing service. Records remain on one browser/device and can be lost if its storage is cleared. There is no record backend, multi-user synchronisation, external payment processing, bank reconciliation, currency conversion inside invoices, public vehicle marketplace, VIN camera scanning or cloud backup. VAT settings and calculations are editable arithmetic only and do not establish tax treatment or compliance. The assistant sign-in gate protects only the assistant: anyone with access to this browser can still open the local records, so use device access control and a secure production system for real books. The assistant is optional, is not deployed from this repository, cannot read or change records, and its replies can be wrong. Use professional advice before relying on business records.
 
 ## Tests
 
 `npm test` runs the Node test suite. It covers naira formatting, VAT and sale totals, balances and invalid payment/rate handling, document numbering, vehicle status transitions and landed-cost arithmetic; the Africa/Lagos greeting and owner-name fallback; NGN cross-rate building and rejection of missing currencies; rate freshness and stale/unavailable states; parsing the provider payload, its error responses, cache round-trip and blocked-storage handling; and that the rate request carries no credentials or record data.
 
 For the assistant it covers the system prompt's accuracy and data rules; payload validation, length and history limits; the origin allowlist with no wildcard; missing, malformed, invalid and unlisted-user sessions; method and body limits; per-user rate limiting; provider failures being mapped to safe messages without the key or provider text; the browser client's config validation, token requirement, history capping, offline/timeout handling and the fact that the outbound body contains only the conversation.
+
+For the sign-in gate it covers Supabase config validation (`https` only, public keys only, `service_role` and `sb_secret_` refused), password sign-in and its error mapping, token refresh just before expiry, refresh rejection clearing the session while an offline refresh keeps it, sign-out revoking and clearing, blocked storage, malformed stored sessions, and that no password is ever written to storage.

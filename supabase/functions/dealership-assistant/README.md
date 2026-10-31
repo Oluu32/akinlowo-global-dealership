@@ -45,29 +45,43 @@ Keep the platform JWT check enabled (the default). This function still verifies 
 
 ## Connect the browser panel
 
-The panel reads its configuration from `window.AKINLOWO_ASSISTANT` at load time. Add a small runtime config **before** the `app.js` module tag:
+The panel reads its configuration from `window.AKINLOWO_SUPABASE` at load time. Add a small runtime config **before** the `app.js` module tag:
+
+```html
+<script>
+  window.AKINLOWO_SUPABASE = {
+    url: 'https://<project-ref>.supabase.co',
+    anonKey: '<public anon / publishable key>'
+  };
+</script>
+```
+
+With this in place the assistant panel opens on a **sign-in gate** (email + password), stores the session in `sessionStorage` for that tab, refreshes it shortly before expiry, and calls the derived endpoint `…/functions/v1/dealership-assistant`. A custom function URL can be set with `assistantEndpoint`.
+
+Create dealer users under **Authentication → Users** in the Supabase dashboard; this app deliberately has no public sign-up, password reset or invitation screen.
+
+Alternatively, a host that already manages sessions can pass the token directly and skip the in-app gate:
 
 ```html
 <script>
   window.AKINLOWO_ASSISTANT = {
     endpoint: 'https://<project-ref>.supabase.co/functions/v1/dealership-assistant',
-    getAccessToken: async () => {
-      const { data } = await supabase.auth.getSession();
-      return data.session?.access_token ?? null;
-    }
+    getAccessToken: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null
   };
 </script>
 ```
 
 Rules enforced by the client:
 
-- Only `https://` endpoints (plus `http://localhost` for local work) are accepted; credentials in the URL are rejected.
-- Without the config object, or without `getAccessToken`, the panel stays disabled and says **Not configured**. Nothing is requested.
-- A null/empty token shows **Sign-in required** and sends nothing.
-- Chat history is kept in page memory only. It is never written to `localStorage` and disappears on reload.
-- Failures map to plain messages: unavailable, busy, sign-in required, not authorised, message too long, offline, timed out.
+- Only `https://` endpoints and project URLs (plus `http://localhost` for local work) are accepted; credentials in the URL are rejected.
+- Only a public anon/publishable key is accepted. A `service_role` JWT or `sb_secret_…` key is refused, so a secret cannot be shipped to a browser by mistake.
+- Without a config object the panel stays disabled and says **Not configured**. Nothing is requested.
+- A missing session shows the gate; an empty or rejected token shows **Sign-in required** and sends nothing.
+- Passwords are sent only to the Supabase auth endpoint and are never stored, logged or reused.
+- Chat history is kept in page memory only, is cleared on sign-out, is never written to storage and disappears on reload.
+- Failures map to plain messages: invalid credentials, unavailable, busy, sign-in required, not authorised, message too long, offline, timed out.
 
-This static app has no sign-in screen of its own. The deployment that hosts it must supply the Supabase session (its own login step or an existing portal) and pass the access token through `getAccessToken`.
+This gate protects the assistant only. The dealership records themselves remain local, unauthenticated and readable by anyone with access to the browser profile.
 
 ## Limits
 
@@ -88,7 +102,7 @@ Rate limiting is a guard rail, not a billing guarantee: Edge instances do not sh
 node dev/assistant-mock-server.mjs      # http://127.0.0.1:8787
 ```
 
-The mock runs the real handler with a stubbed provider and a fake token, so the interface can be exercised end to end. It accepts only `mock-session-token-for-local-ui-only`, serves only the allowlisted local origin, and contains no secrets. It is development-only and is not deployed.
+The mock runs the real handler with a stubbed provider plus fake Supabase Auth endpoints, so the gate, session refresh and chat can be exercised end to end. Sign in with `dealer@akinlowo.test` / `demo-dealer-2026` (fake, local only). It serves only the allowlisted local origin and contains no secrets. It is development-only and is not deployed.
 
 `npm test` covers the handler (auth rejection, CORS, validation, limits, rate limiting, provider failures) and the browser client (config validation, privacy of the request body, history caps, safe error mapping).
 
@@ -96,4 +110,4 @@ The mock runs the real handler with a stubbed provider and a fake token, so the 
 
 - No Supabase project, account or CLI session was available, so the function has **not** been deployed or invoked live.
 - No Groq key was available, so there has been **no live model call**.
-- No browser auth/session provider exists in this static app yet, so the "signed-in" path is exercised only through the mock and unit tests.
+- The sign-in gate, token refresh, session expiry and sign-out have been exercised only against the local mock and unit tests, never against a live Supabase Auth project.

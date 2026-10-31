@@ -3,23 +3,32 @@ import {
   ASSISTANT_MAX_HISTORY,
   ASSISTANT_SUGGESTIONS,
   createAssistantClient,
-  readAssistantConfig
+  isAllowedEndpoint
 } from './assistant-client.js';
+import { AUTH_COPY, createAuthClient, readAuthConfig } from './auth-client.js';
 
 /**
- * Floating assistant panel.
+ * Floating assistant panel with an optional sign-in gate.
  *
- * The panel is only wired to a chat endpoint when the deployment injects
- * window.AKINLOWO_ASSISTANT. Without it the panel stays open as a labelled,
- * disabled shell and no request is made.
+ * Two deployment modes are supported:
+ * 1. App-owned auth: window.AKINLOWO_SUPABASE = { url, anonKey } enables a
+ *    Supabase Auth sign-in form inside the panel; the token is refreshed by
+ *    the app and the assistant endpoint is derived from the project URL.
+ * 2. Host-owned session: window.AKINLOWO_ASSISTANT = { endpoint,
+ *    getAccessToken } keeps the earlier contract, with no gate in this app.
  *
- * Conversation history lives in this module's memory only: it is never written
- * to localStorage, never exported, and is discarded when the page reloads.
+ * With neither, the panel stays in a labelled "Not configured" state.
+ *
+ * Conversation history lives in memory only, is cleared on sign-out and is
+ * never written to storage. Records on this device are never read into it.
  */
 
 let client = null;
+let auth = null;
 let configured = false;
+let injectedToken = null;
 let busy = false;
+let signingIn = false;
 let ready = false;
 let initialised = false;
 const history = [];
@@ -33,7 +42,8 @@ export function setAssistant(open) {
   panel.hidden = !open;
   fab.setAttribute('aria-expanded', String(open));
   if (!open) return;
-  if (configured) el('assistant-input')?.focus();
+  if (isGated()) el('assistant-email')?.focus();
+  else if (configured) el('assistant-input')?.focus();
   else panel.querySelector('[data-action="close-assistant"]')?.focus();
 }
 
@@ -44,18 +54,18 @@ export function initAssistantPanel(scope = globalThis) {
   if (!form || !input) return;
   initialised = true;
 
-  const config = readAssistantConfig(scope);
-  configured = Boolean(config);
-  client = createAssistantClient({ config });
+  const authConfig = readAuthConfig(scope);
+  auth = authConfig ? createAuthClient({ config: authConfig }) : null;
 
-  renderIntro();
-  renderSuggestions();
-  setStatus(
-    configured ? 'ready' : 'off',
-    configured ? 'Ready' : 'Not configured',
-    configured ? 'Messages are checked against your signed-in session.' : 'No assistant endpoint is configured for this deployment.'
-  );
-  syncComposer();
+  const rawAssistant = scope?.AKINLOWO_ASSISTANT;
+  const rawEndpoint = typeof rawAssistant?.endpoint === 'string' ? rawAssistant.endpoint.trim() : '';
+  let endpoint = rawEndpoint && isAllowedEndpoint(rawEndpoint, scope?.location) ? rawEndpoint : '';
+  if (!endpoint && auth) endpoint = auth.config.endpoint;
+
+  injectedToken = typeof rawAssistant?.getAccessToken === 'function' ? rawAssistant.getAccessToken : null;
+  const getAccessToken = injectedToken ?? (auth ? () => auth.getAccessToken() : null);
+  configured = Boolean(endpoint && getAccessToken);
+  client = createAssistantClient({ config: configured ? { endpoint, getAccessToken } : null });
 
   form.addEventListener('submit', event => {
     event.preventDefault();
@@ -74,20 +84,72 @@ export function initAssistantPanel(scope = globalThis) {
     if (!chip) return;
     void sendMessage(chip.dataset.assistantSuggestion ?? '');
   });
+
+  el('assistant-auth-form')?.addEventListener('submit', event => {
+    event.preventDefault();
+    void signIn();
+  });
+
+  el('assistant-signout')?.addEventListener('click', () => { void signOut(); });
+
+  refreshGate();
+}
+
+function currentSession() {
+  return auth && !injectedToken ? auth.getSession() : null;
+}
+
+function isGated() {
+  const gate = el('assistant-auth');
+  return Boolean(gate && !gate.hidden);
+}
+
+function refreshGate({ announcement = '' } = {}) {
+  const session = currentSession();
+  const signedIn = Boolean(injectedToken) || Boolean(session);
+  const gated = configured && !signedIn;
+
+  const gate = el('assistant-auth');
+  if (gate) gate.hidden = !gated;
+  const log = el('assistant-log');
+  if (log) log.hidden = gated;
+  const compose = el('assistant-form');
+  if (compose) compose.hidden = gated;
+  const signout = el('assistant-signout');
+  if (signout) signout.hidden = gated || !auth || Boolean(injectedToken);
+
+  renderIntro();
+  renderSuggestions();
+  const suggestions = el('assistant-suggestions');
+  if (suggestions) suggestions.hidden = gated || !configured;
+
+  if (!configured) {
+    setStatus('off', 'Not configured', 'No assistant endpoint is configured for this deployment.');
+  } else if (gated) {
+    setStatus('off', 'Sign-in required', 'Records stay in this browser; signing in only unlocks the assistant.');
+  } else if (injectedToken) {
+    setStatus('ready', 'Ready', 'Messages are checked against your signed-in session.');
+  } else {
+    setStatus(ready ? 'ready' : 'ready', ready ? 'Connected' : 'Ready', `Signed in as ${session?.user?.email || 'this account'}.`);
+  }
+
+  syncComposer();
+  if (gated) hideAuthError();
+  if (announcement) appendBubble('assistant', announcement);
 }
 
 function renderIntro() {
   const log = el('assistant-log');
   if (!log) return;
   log.replaceChildren();
-  appendBubble(
-    'assistant',
-    configured
-      ? 'Ask me how to use this desk — invoices, receipts, VAT, payments, stock or the rate panel. I cannot see your saved records and I cannot change anything for you.'
-      : 'The assistant is not connected in this deployment. No messages are sent, and nothing on this page leaves your browser.'
-  );
   if (configured) {
+    appendBubble(
+      'assistant',
+      'Ask me how to use this desk — invoices, receipts, VAT, payments, stock or the rate panel. I cannot see your saved records and I cannot change anything for you.'
+    );
     appendBubble('assistant', 'Only the words you type are sent to the assistant service. Your vehicles, sales, customers, documents and every other saved record stay in this browser.');
+  } else {
+    appendBubble('assistant', 'The assistant is not connected in this deployment. No messages are sent, and nothing on this page leaves your browser.');
   }
 }
 
@@ -95,11 +157,7 @@ function renderSuggestions() {
   const holder = el('assistant-suggestions');
   if (!holder) return;
   holder.replaceChildren();
-  if (!configured) {
-    holder.hidden = true;
-    return;
-  }
-  holder.hidden = false;
+  if (!configured) return;
   for (const suggestion of ASSISTANT_SUGGESTIONS) {
     const chip = document.createElement('button');
     chip.type = 'button';
@@ -110,10 +168,72 @@ function renderSuggestions() {
   }
 }
 
+async function signIn() {
+  const form = el('assistant-auth-form');
+  if (!auth || !form || signingIn) return;
+  signingIn = true;
+  const button = el('assistant-auth-submit');
+  const data = new FormData(form);
+  const email = String(data.get('email') ?? '');
+  const password = String(data.get('password') ?? '');
+
+  hideAuthError();
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Signing in…';
+  }
+  const result = await auth.signIn(email, password);
+  signingIn = false;
+  if (button) {
+    button.disabled = false;
+    button.textContent = 'Sign in';
+  }
+
+  if (!result.ok) {
+    showAuthError(result.message);
+    if (result.code === 'offline' || result.code === 'unavailable') {
+      setStatus('error', 'Sign-in unavailable', 'The sign-in service could not be reached.');
+    }
+    return;
+  }
+
+  form.reset();
+  history.length = 0;
+  ready = false;
+  refreshGate({ announcement: `Signed in as ${result.session.user.email || 'this account'}. Ask a question whenever you are ready.` });
+  el('assistant-input')?.focus();
+}
+
+async function signOut() {
+  if (!auth || busy || signingIn) return;
+  const button = el('assistant-signout');
+  if (button) button.disabled = true;
+  await auth.signOut();
+  if (button) button.disabled = false;
+  history.length = 0;
+  ready = false;
+  refreshGate({ announcement: 'Signed out. Sign in again to use the assistant.' });
+  el('assistant-email')?.focus();
+}
+
+function showAuthError(message) {
+  const note = el('assistant-auth-error');
+  if (!note) return;
+  note.textContent = message;
+  note.hidden = false;
+}
+
+function hideAuthError() {
+  const note = el('assistant-auth-error');
+  if (!note) return;
+  note.hidden = true;
+  note.textContent = '';
+}
+
 async function sendMessage(raw) {
   const input = el('assistant-input');
   const message = typeof raw === 'string' ? raw.trim() : '';
-  if (busy) return;
+  if (busy || isGated()) return;
 
   if (!configured) {
     setStatus('off', 'Not configured', 'No assistant endpoint is configured for this deployment.');
@@ -145,10 +265,10 @@ async function sendMessage(raw) {
     history.push({ role: 'user', content: message }, { role: 'assistant', content: result.reply });
     if (history.length > ASSISTANT_MAX_HISTORY) history.splice(0, history.length - ASSISTANT_MAX_HISTORY);
     ready = true;
-    setStatus('ready', 'Connected', 'Replies come from the dealership assistant service.');
+    setStatus('ready', 'Connected', currentSession()?.user?.email ? `Signed in as ${currentSession().user.email}.` : 'Replies come from the dealership assistant service.');
   } else {
-    appendError(result.message);
     applyFailure(result);
+    if (!result.code || !['signed-out', 'not-authorised'].includes(result.code)) appendError(result.message);
     if (input && !input.value) input.value = message;
   }
 
@@ -159,6 +279,15 @@ async function sendMessage(raw) {
 function applyFailure(result) {
   switch (result.code) {
     case 'signed-out':
+      if (auth && !injectedToken) {
+        auth.clearSession();
+        history.length = 0;
+        ready = false;
+        refreshGate();
+        showAuthError(AUTH_COPY.expired);
+        setStatus('off', 'Sign-in required', 'Your session ended. Sign in again to continue.');
+        return;
+      }
       setStatus('off', 'Sign-in required', 'Your session was not accepted. Sign in again to use the assistant.');
       break;
     case 'not-configured':
@@ -185,9 +314,11 @@ function syncComposer() {
   const input = el('assistant-input');
   const send = el('assistant-send');
   if (!input || !send) return;
-  const disabled = !configured || busy;
+  const disabled = !configured || busy || isGated();
   input.disabled = disabled;
   send.disabled = disabled;
+  const signout = el('assistant-signout');
+  if (signout) signout.disabled = busy;
   input.placeholder = configured
     ? busy ? 'Waiting for a reply…' : 'Ask about invoices, receipts, VAT or stock'
     : 'Messaging is disabled — assistant not configured';
