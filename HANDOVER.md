@@ -145,7 +145,7 @@ If you ever serve the desk from a different address, add that exact origin (sche
 host, port) to `ASSISTANT_ALLOWED_ORIGINS`, or the assistant will refuse to answer
 from the browser. The records themselves do not depend on that setting.
 
-**Run the tests.** `npm test` (Node 18+). 80 checks cover the money arithmetic,
+**Run the tests.** `npm test` (Node 18+). 82 checks cover the money arithmetic,
 document numbering, storage contract, sign-in gate and assistant limits. Run it
 before pushing if you change code.
 
