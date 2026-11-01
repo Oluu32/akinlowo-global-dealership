@@ -1,0 +1,10 @@
+# Local dependencies from browser-testing and tooling
+node_modules/
+
+# Scratch QA scripts and browser profiles used to exercise the desk
+.qa-*.mjs
+.qa-*.js
+.qa-profile*/
+
+# Local Supabase CLI cache (created by `supabase functions deploy`)
+supabase/.temp/
