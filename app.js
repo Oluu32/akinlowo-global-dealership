@@ -289,7 +289,7 @@ function vehicleForm(vehicle={}) {
 }
 function saleForm() {
   const cars=state.vehicles.filter(v=>['available','reserved'].includes(v.status));
-  return `<form id="sale-form" class="modal-form"><h3 class="form-section-title">Select stock and buyer</h3><div class="form-grid"><div class="field full"><label>Vehicle *</label><select class="input" name="vehicleId" required>${cars.map(v=>`<option value="${v.id}">${escapeHtml(vehicleName(v))} · ${escapeHtml(v.status)} · ask ${money(v.askingPrice)}</option>`).join('')}</select>${cars.length?'':'<span class="error">No available or reserved cars. Add stock first.</span>'}</div><div class="field"><label>Buyer name *</label><input class="input" name="buyerName" required></div><div class="field"><label>Buyer phone</label><input class="input" name="buyerPhone" type="tel"></div><div class="field full"><label>Buyer address</label><input class="input" name="buyerAddress"></div><div class="field"><label>Sale date *</label><input class="input" name="date" type="date" value="${today()}" required></div><div class="field"><label>Sale price (₦) *</label><input class="input" name="price" type="number" min="0" step="0.01" required></div></div><hr class="form-divider"><h3 class="form-section-title">Payment and document</h3><div class="form-grid">${state.settings.vatEnabled===true?`<div class="field"><label class="checkbox-row"><input type="checkbox" name="vatEnabled"> Add VAT to this sale (optional, off by default)</label></div><div class="field"><label>VAT rate (%)</label><input class="input" name="vatRate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(state.settings.vatRate)}"></div>`:''}<div class="field"><label>Amount received now (₦)</label><input class="input" name="paid" type="number" min="0" step="0.01" value="0"></div><div class="field"><label>Payment method</label><select class="input" name="paymentMethod"><option>Bank transfer</option><option>Cash</option><option>POS</option><option>Cheque</option><option>Other</option></select></div><div class="field full"><label>Sale terms</label><textarea class="input" name="terms" rows="3">Vehicle sold in the condition inspected by the buyer. Please retain this document for your records.</textarea></div><div class="field full"><label>Accessories / remarks</label><textarea class="input" name="remarks" rows="2"></textarea></div></div><p class="small-note">A numbered invoice requests the full sale amount. Any payment you enter is recorded separately and creates its own receipt. Both numbers follow this desk's own sequence.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary" ${cars.length?'':'disabled'}>Create sale & invoice</button></div></form>`;
+  return `<form id="sale-form" class="modal-form"><h3 class="form-section-title">Select stock and buyer</h3><div class="form-grid"><div class="field full"><label>Vehicle *</label><select class="input" name="vehicleId" required>${cars.map(v=>`<option value="${v.id}">${escapeHtml(vehicleName(v))} · ${escapeHtml(v.status)} · ask ${money(v.askingPrice)}</option>`).join('')}</select>${cars.length?'':'<span class="error">No available or reserved cars. Add stock first.</span>'}</div><div class="field"><label>Buyer name *</label><input class="input" name="buyerName" required></div><div class="field"><label>Buyer phone</label><input class="input" name="buyerPhone" type="tel"></div><div class="field full"><label>Buyer address</label><input class="input" name="buyerAddress"></div><div class="field"><label>Sale date *</label><input class="input" name="date" type="date" value="${today()}" required></div><div class="field"><label>Sale price (₦) *</label><input class="input" name="price" type="number" min="0" step="0.01" required></div></div><hr class="form-divider"><h3 class="form-section-title">Payment and document</h3><div class="form-grid">${state.settings.vatEnabled===true?`<div class="field"><label class="checkbox-row"><input type="checkbox" name="vatEnabled"> Add VAT to this sale (optional, off by default)</label></div><div class="field"><label>VAT rate (%)</label><input class="input" name="vatRate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(state.settings.vatRate)}"></div>`:''}<div class="field"><label>Amount received now (₦)</label><input class="input" name="paid" type="number" min="0" step="0.01" value="0"></div><div class="field"><label>Payment method</label><select class="input" name="paymentMethod"><option>Bank transfer</option><option>Cash</option><option>POS</option><option>Cheque</option><option>Other</option></select></div><div class="field full"><label>Sale terms</label><textarea class="input" name="terms" rows="3">${SALE_TERMS_DEFAULT}</textarea></div><div class="field full"><label>Accessories / remarks</label><textarea class="input" name="remarks" rows="2"></textarea></div></div><p class="small-note">A numbered invoice requests the full sale amount. Any payment you enter is recorded separately and creates its own receipt. Both numbers follow this desk's own sequence.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary" ${cars.length?'':'disabled'}>Create sale & invoice</button></div></form>`;
 }
 function expenseForm() { return `<form id="expense-form" class="modal-form"><div class="form-grid"><div class="field full"><label>Description *</label><input class="input" name="description" required></div><div class="field"><label>Category</label><select class="input" name="category"><option>Vehicle purchase</option><option>Clearing</option><option>Transport</option><option>Repairs</option><option>Office</option><option>Marketing</option><option>Other</option></select></div><div class="field"><label>Date *</label><input class="input" name="date" type="date" value="${today()}" required></div><div class="field"><label>Cash amount (₦) *</label><input class="input" name="amount" type="number" min="0" step="0.01" required></div>${state.settings.vatEnabled===true?'<div class="field"><label>Input VAT included (₦)</label><input class="input" name="inputVat" type="number" min="0" step="0.01" value="0"></div>':''}<div class="field full"><label>Related vehicle (optional)</label><select class="input" name="vehicleId"><option value="">General expense</option>${state.vehicles.map(v=>`<option value="${v.id}">${escapeHtml(vehicleName(v))}</option>`).join('')}</select></div></div><p class="small-note">${state.settings.vatEnabled===true?'Enter the cash amount and any input VAT from your own records. This desk does not determine tax eligibility.':'Enter the cash amount from your own records. This desk does not determine tax eligibility.'}</p><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary">Save expense</button></div></form>`; }
 function supplierPaymentForm(supplier) {
@@ -301,18 +301,22 @@ function createDoc(kind,sale,paymentAmount=0) {
   const n=nextDocumentNumber(state.counters[kind]||0,kind,sale.date); state.counters[kind]=n.sequence;
   const doc={id:makeId(),kind,number:n.number,date:sale.date,createdAt:new Date().toISOString(),saleId:sale.id,paymentAmount:Number(paymentAmount)||0}; state.documents.push(doc); return doc;
 }
-function submitSale(form) {
-  const data=new FormData(form), vehicle=state.vehicles.find(v=>v.id===data.get('vehicleId'));
+const SALE_TERMS_DEFAULT='Vehicle sold in the condition inspected by the buyer. Please retain this document for your records.';
+function recordSale(input) {
+  const vehicle=input.vehicle, paid=Number(input.paid||0), rate=Number(input.vatRate||0), vatEnabled=input.vatEnabled===true;
   if(!vehicle||!['available','reserved'].includes(vehicle.status)) throw new Error('That vehicle is no longer available for sale');
-  const price=Number(data.get('price')), rate=Number(data.get('vatRate')||0), paid=Number(data.get('paid')||0), vatEnabled=state.settings.vatEnabled===true&&data.has('vatEnabled');
-  const calc=calculateSale({price,vatRate:rate,vatEnabled,paid});
-  const sale={id:makeId(),vehicleId:vehicle.id,buyerName:String(data.get('buyerName')).trim(),buyerPhone:String(data.get('buyerPhone')||'').trim(),buyerAddress:String(data.get('buyerAddress')||'').trim(),date:String(data.get('date')),basePrice:calc.base,vatAmount:calc.vat,vatRate:vatEnabled?rate:0,total:calc.total,paidAmount:calc.paid,payments:[],paymentMethod:String(data.get('paymentMethod')),terms:String(data.get('terms')||''),remarks:String(data.get('remarks')||''),vehicleExpense:0};
+  const calc=calculateSale({price:Number(input.price),vatRate:rate,vatEnabled,paid});
+  const sale={id:makeId(),vehicleId:vehicle.id,buyerName:String(input.buyerName||'').trim(),buyerPhone:String(input.buyerPhone||'').trim(),buyerAddress:String(input.buyerAddress||'').trim(),date:String(input.date||today()),basePrice:calc.base,vatAmount:calc.vat,vatRate:vatEnabled?rate:0,total:calc.total,paidAmount:calc.paid,payments:[],paymentMethod:String(input.paymentMethod||'Bank transfer'),terms:String(input.terms||''),remarks:String(input.remarks||''),vehicleExpense:0};
   if(!sale.buyerName) throw new Error('Buyer name is required');
-  if(paid>0) sale.payments.push({id:makeId(),amount:paid,date:sale.date,method:sale.paymentMethod});
+  if(calc.paid>0) sale.payments.push({id:makeId(),amount:calc.paid,date:sale.date,method:sale.paymentMethod});
   vehicle.status=transitionVehicleStatus(vehicle.status,'sold');
   state.sales.push(sale); const invoice=createDoc('invoice',sale); sale.invoiceDocId=invoice.id; sale.invoiceNumber=invoice.number;
-  if(paid>0){const receipt=createDoc('receipt',sale,paid);sale.latestReceiptId=receipt.id;}
+  if(calc.paid>0){const receipt=createDoc('receipt',sale,calc.paid);sale.latestReceiptId=receipt.id;}
   save();return sale;
+}
+function submitSale(form) {
+  const data=new FormData(form);
+  return recordSale({vehicle:state.vehicles.find(v=>v.id===data.get('vehicleId')),buyerName:data.get('buyerName'),buyerPhone:data.get('buyerPhone'),buyerAddress:data.get('buyerAddress'),date:data.get('date'),price:Number(data.get('price')),paid:Number(data.get('paid')||0),vatEnabled:state.settings.vatEnabled===true&&data.has('vatEnabled'),vatRate:Number(data.get('vatRate')||0),paymentMethod:String(data.get('paymentMethod')),terms:String(data.get('terms')||''),remarks:String(data.get('remarks')||'')});
 }
 function documentPage(doc) {
   const sale=state.sales.find(s=>s.id===doc.saleId);if(!sale){toast('Document data was not found');return;}
@@ -403,6 +407,51 @@ document.addEventListener('submit',e=>{
       save();closeModal();render();toast('Supplier payment recorded');
     }
   }catch(err){const old=f.querySelector('.error-message');if(old)old.remove();const note=document.createElement('p');note.className='error error-message';note.textContent=err.message||'Could not save this record';f.append(note);}
+});
+/* ---------- Assistant desk actions: prepared by the assistant, applied here ---------- */
+function matchStockVehicle(query) {
+  const q=String(query||'').toLowerCase().replace(/\s+/g,' ').trim(); if(!q) return [];
+  const tokens=q.split(' '), open=state.vehicles.filter(v=>['available','reserved'].includes(v.status));
+  const scored=open.map(v=>{const name=vehicleName(v).toLowerCase(), vin=String(v.vin||'').toLowerCase(); const hay=`${name} ${vin} ${String(v.color||'').toLowerCase()} ${String(v.plate||'').toLowerCase()}`; const score=(vin&&vin===q)||name===q?3:tokens.every(t=>hay.includes(t))?2:0; return [v,score];}).filter(([,score])=>score>0);
+  if(!scored.length) return [];
+  const best=Math.max(...scored.map(([,score])=>score));
+  return scored.filter(([,score])=>score===best).map(([v])=>v);
+}
+function findDeskDocument(action) {
+  if(action.number){const key=String(action.number).toLowerCase(); return state.documents.find(d=>String(d.number).toLowerCase()===key)||null;}
+  const name=String(action.buyerName||'').toLowerCase(); if(!name) return null;
+  const saleIds=new Set(state.sales.filter(s=>String(s.buyerName||'').toLowerCase().includes(name)).map(s=>s.id));
+  return state.documents.filter(d=>saleIds.has(d.saleId)&&(!action.kind||d.kind===action.kind)).sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)))[0]||null;
+}
+function applyDeskAction(action) {
+  if(action.type==='create_sale'){
+    const matches=matchStockVehicle(action.vehicle);
+    if(!matches.length) throw new Error(`No available or reserved vehicle matches “${action.vehicle}”. Add it to stock first.`);
+    if(matches.length>1) throw new Error(`“${action.vehicle}” matches more than one vehicle (${matches.map(v=>vehicleName(v)).join('; ')}). Record this sale from Sales so you can pick the right one.`);
+    const sale=recordSale({vehicle:matches[0],buyerName:action.buyerName,buyerPhone:action.buyerPhone,date:action.saleDate||today(),price:action.price,paid:action.amountPaid,paymentMethod:action.paymentMethod,vatEnabled:false,vatRate:0,terms:SALE_TERMS_DEFAULT,remarks:''});
+    render();
+    return {message:`Sale saved · invoice ${sale.invoiceNumber}${sale.latestReceiptId?' and its receipt':''}.`,documentNumber:sale.invoiceNumber};
+  }
+  if(action.type==='add_vehicle'){
+    const record={make:action.make,model:action.model,year:Number(action.year),vin:action.vin||'',color:action.color||'',condition:action.condition||'Tokunbo',mileage:Number(action.mileage)||0,askingPrice:Number(action.askingPrice)||0,acquisitionCost:Number(action.acquisitionCost)||0,clearing:Number(action.clearing)||0,transport:Number(action.transport)||0,repairs:Number(action.repairs)||0,arrivalDate:action.arrivalDate||today(),status:'available',engine:'',plate:'',cNumber:''};
+    state.vehicles.push({...record,id:makeId()}); save(); render();
+    return {message:`Stock updated · ${vehicleName(record)} added as available.`};
+  }
+  if(action.type==='open_document'){
+    const doc=findDeskDocument(action);
+    if(!doc) throw new Error(action.number?`No invoice or receipt numbered ${action.number} is on this desk.`:`No ${action.kind||'invoice or receipt'} found for ${action.buyerName}.`);
+    documentPage(doc);
+    return {message:`Opened ${doc.number}.`};
+  }
+  throw new Error('The desk does not support that action.');
+}
+document.addEventListener('akinlowo:desk-action', event => {
+  const detail=event.detail||{}, reply={id:detail.id,ok:false,message:''};
+  try{
+    if(document.body.classList.contains('desk-locked')) throw new Error('Sign in to the desk first.');
+    Object.assign(reply,{ok:true},applyDeskAction(detail.action||{}));
+  }catch(error){ reply.ok=false; reply.message=error?.message||'The desk could not complete that action.'; }
+  document.dispatchEvent(new CustomEvent('akinlowo:desk-action-result',{detail:reply}));
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') setAssistant(false); });
 document.addEventListener('click', e => {

@@ -85,6 +85,18 @@ export function initAssistantPanel(scope = globalThis) {
     void sendMessage(chip.dataset.assistantSuggestion ?? '');
   });
 
+  el('assistant-log')?.addEventListener('click', event => {
+    const card = event.target.closest('.assistant-action');
+    if (!card) return;
+    if (event.target.closest('[data-assistant-dismiss]')) {
+      card.remove();
+      return;
+    }
+    if (event.target.closest('[data-assistant-approve]') || event.target.closest('[data-assistant-open]')) {
+      void runActionCard(card, actionByCard.get(card));
+    }
+  });
+
   el('assistant-auth-form')?.addEventListener('submit', event => {
     event.preventDefault();
     void signIn();
@@ -160,7 +172,7 @@ function renderIntro() {
   if (configured) {
     appendBubble(
       'assistant',
-      'Ask me how to use this desk — invoices, receipts, VAT, payments, stock or the rate panel. I cannot see your saved records and I cannot change anything for you.'
+      'Ask me how to use this desk, or tell me what to record — a sale with its invoice and receipt, or a new vehicle. I prepare the record and you approve it on the card; nothing is saved until you do. I still cannot see your saved records.'
     );
     appendBubble('assistant', 'Only the words you type are sent to the assistant service. Your vehicles, sales, customers, documents and every other saved record are never sent with a message.');
   } else {
@@ -277,8 +289,9 @@ async function sendMessage(raw) {
   busy = false;
 
   if (result.ok) {
-    appendBubble('assistant', result.reply);
-    history.push({ role: 'user', content: message }, { role: 'assistant', content: result.reply });
+    if (result.reply) appendBubble('assistant', result.reply);
+    if (result.action) appendActionCard(result.action);
+    history.push({ role: 'user', content: message }, { role: 'assistant', content: result.reply || 'Prepared an action card for approval.' });
     if (history.length > ASSISTANT_MAX_HISTORY) history.splice(0, history.length - ASSISTANT_MAX_HISTORY);
     ready = true;
     setStatus('ready', 'Connected', currentSession()?.user?.email ? `Signed in as ${currentSession().user.email}.` : 'Replies come from the dealership assistant service.');
@@ -341,6 +354,177 @@ function syncComposer() {
   send.textContent = busy ? 'Sending…' : 'Send';
 }
 
+/* ------------------------------------------------------------------ *
+ * Desk actions. The assistant only prepares; the desk writes after the
+ * person presses Approve, and reports back what it did.
+ * ------------------------------------------------------------------ */
+const actionByCard = new WeakMap();
+const DESK_ACTION_TIMEOUT_MS = 6000;
+
+function naira(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '—';
+  return `₦${amount.toLocaleString('en-NG', { maximumFractionDigits: 2 })}`;
+}
+
+function summariseAction(action) {
+  if (action.type === 'create_sale') {
+    return {
+      kicker: 'Sale ready for approval',
+      title: action.vehicle,
+      rows: [
+        ['Buyer', action.buyerName],
+        ['Price', naira(action.price)],
+        ['Paid now', naira(action.amountPaid)],
+        ['Method', action.paymentMethod],
+        ['Balance', naira(Math.max(0, action.price - action.amountPaid))]
+      ],
+      note: 'Approve to record the sale, issue the invoice and, if a payment is entered, its receipt. VAT is not added by the assistant.'
+    };
+  }
+  if (action.type === 'add_vehicle') {
+    return {
+      kicker: 'Stock ready for approval',
+      title: `${action.year} ${action.make} ${action.model}`,
+      rows: [
+        ['Asking price', naira(action.askingPrice)],
+        ['Acquisition', naira(action.acquisitionCost)],
+        ['Clearing / transport / repairs', `${naira(action.clearing)} · ${naira(action.transport)} · ${naira(action.repairs)}`],
+        ['VIN', action.vin || 'Not given'],
+        ['Condition', action.condition]
+      ],
+      note: 'Approve to add this vehicle to available stock. Fill in anything missing afterwards from Inventory.'
+    };
+  }
+  return {
+    kicker: 'Open a saved document',
+    title: action.number || `${action.buyerName} · ${action.kind || 'latest document'}`,
+    rows: action.number ? [['Number', action.number]] : [['Buyer', action.buyerName], ['Document', action.kind || 'Latest invoice or receipt']],
+    note: 'Opens the stored invoice or receipt in its print view. Nothing is changed.'
+  };
+}
+
+function appendActionCard(action) {
+  const log = el('assistant-log');
+  if (!log) return null;
+  const summary = summariseAction(action);
+  const card = document.createElement('section');
+  card.className = 'assistant-action';
+
+  const kicker = document.createElement('p');
+  kicker.className = 'assistant-action-kicker';
+  kicker.textContent = summary.kicker;
+
+  const title = document.createElement('h3');
+  title.textContent = summary.title;
+
+  const list = document.createElement('dl');
+  list.className = 'assistant-action-list';
+  for (const [label, value] of summary.rows) {
+    const row = document.createElement('div');
+    const term = document.createElement('dt');
+    term.textContent = label;
+    const detail = document.createElement('dd');
+    detail.textContent = value;
+    row.append(term, detail);
+    list.append(row);
+  }
+
+  const note = document.createElement('p');
+  note.className = 'assistant-action-note';
+  note.textContent = summary.note;
+
+  const buttons = document.createElement('div');
+  buttons.className = 'assistant-action-buttons';
+  const primary = document.createElement('button');
+  primary.type = 'button';
+  primary.className = 'button button-primary button-small';
+  primary.setAttribute(action.type === 'open_document' ? 'data-assistant-open' : 'data-assistant-approve', '');
+  primary.textContent = action.type === 'open_document' ? 'Open document' : 'Approve and save';
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'button button-quiet button-small';
+  dismiss.setAttribute('data-assistant-dismiss', '');
+  dismiss.textContent = 'Dismiss';
+  buttons.append(primary, dismiss);
+
+  card.append(kicker, title, list, note, buttons);
+  actionByCard.set(card, action);
+  log.append(card);
+  scrollToLatest(true);
+  return card;
+}
+
+function requestDeskAction(action) {
+  return new Promise(resolve => {
+    const id = `desk-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      document.removeEventListener('akinlowo:desk-action-result', onResult);
+      resolve(value);
+    };
+    const onResult = event => {
+      if (event.detail?.id === id) finish(event.detail);
+    };
+    const timer = setTimeout(() => finish({ ok: false, message: 'The desk did not answer. Try again from its own screens.' }), DESK_ACTION_TIMEOUT_MS);
+    document.addEventListener('akinlowo:desk-action-result', onResult);
+    document.dispatchEvent(new CustomEvent('akinlowo:desk-action', { detail: { id, action } }));
+  });
+}
+
+function setCardBusy(card, busy) {
+  for (const button of card.querySelectorAll('button')) button.disabled = busy;
+  const primary = card.querySelector('[data-assistant-approve], [data-assistant-open]');
+  if (primary && busy) primary.textContent = 'Saving…';
+}
+
+function showCardResult(card, result, action) {
+  card.classList.add(result.ok ? 'is-done' : 'is-failed');
+  const note = card.querySelector('.assistant-action-note');
+  if (note) note.textContent = result.ok ? (result.message || 'Saved to the desk.') : (result.message || 'The desk could not complete that.');
+  const buttons = card.querySelector('.assistant-action-buttons');
+  if (!buttons) return;
+  buttons.replaceChildren();
+  if (result.ok && result.documentNumber) {
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'button button-secondary button-small';
+    open.textContent = `Open ${result.documentNumber}`;
+    open.addEventListener('click', async () => {
+      const opened = await requestDeskAction({ type: 'open_document', number: result.documentNumber, buyerName: '', kind: '' });
+      if (!opened.ok) note.textContent = opened.message;
+    });
+    buttons.append(open);
+  }
+  if (!result.ok) {
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'button button-quiet button-small';
+    retry.textContent = 'Try again';
+    retry.addEventListener('click', () => { void runActionCard(card, action); });
+    buttons.append(retry);
+  }
+  const dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'button button-quiet button-small';
+  dismiss.textContent = 'Dismiss';
+  dismiss.addEventListener('click', () => card.remove());
+  buttons.append(dismiss);
+  scrollToLatest(true);
+}
+
+async function runActionCard(card, action) {
+  if (!action) return;
+  card.classList.remove('is-done', 'is-failed');
+  setCardBusy(card, true);
+  const result = await requestDeskAction(action);
+  setCardBusy(card, false);
+  showCardResult(card, result, action);
+}
+
 function setStatus(kind, label, note) {
   const pill = el('assistant-status');
   if (pill) {
@@ -390,7 +574,9 @@ function appendPending() {
   return bubble;
 }
 
-function scrollToLatest() {
+function scrollToLatest(instant = false) {
   const log = el('assistant-log');
-  if (log) log.scrollTop = log.scrollHeight;
+  if (!log) return;
+  if (instant) log.scrollTo({ top: log.scrollHeight, behavior: 'instant' });
+  else log.scrollTop = log.scrollHeight;
 }

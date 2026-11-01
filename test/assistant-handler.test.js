@@ -51,7 +51,7 @@ test('forwards only the conversation to the provider', async () => {
   await handler(post([user('hello')]));
   assert.equal(sent.model, 'test-model');
   assert.deepEqual(sent.messages.slice(1), [user('hello')]);
-  assert.deepEqual(Object.keys(sent).sort(), ['max_tokens', 'messages', 'model', 'n', 'stream', 'temperature', 'top_p']);
+  assert.deepEqual(Object.keys(sent).sort(), ['max_tokens', 'messages', 'model', 'n', 'stream', 'temperature', 'tool_choice', 'tools', 'top_p']);
   assert.equal(JSON.stringify(sent.messages.slice(1)).includes('buyerName'), false);
   assert.equal(JSON.stringify(sent.messages.slice(1)).includes('demo-car'), false);
 });

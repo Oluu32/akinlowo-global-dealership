@@ -31,9 +31,9 @@ export const ASSISTANT_COPY = Object.freeze({
 });
 
 export const ASSISTANT_SUGGESTIONS = Object.freeze([
-  'How do I create an invoice?',
+  'Sell the 2021 Camry to Aisha Bello for 24.5m, 10m paid by transfer',
+  'Add a 2019 Lexus RX 350 to stock, asking 32.5m',
   'How do I record a part payment and get a receipt?',
-  'Is VAT added to a new sale by default?',
   'What do the exchange rates mean?'
 ]);
 
@@ -73,6 +73,68 @@ export function buildRequestMessages(history, message) {
   }
   while (clean.length > 0 && clean[0].role !== 'user') clean.shift();
   return [...clean, { role: 'user', content: String(message ?? '').trim().slice(0, ASSISTANT_MAX_CHARS) }];
+}
+
+/**
+ * The server may propose one desk action. This module repeats the checks the
+ * desk will make, so a malformed action is dropped before it reaches the UI.
+ */
+export const ASSISTANT_ACTION_TYPES = Object.freeze(['create_sale', 'add_vehicle', 'open_document']);
+
+export function readAction(value) {
+  if (!value || typeof value !== 'object' || !ASSISTANT_ACTION_TYPES.includes(value.type)) return null;
+  const text = (input, max = 120) => (typeof input === 'string' ? input.trim().slice(0, max) : '');
+  const money = input => {
+    const amount = Number(input);
+    return Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) / 100 : null;
+  };
+  if (value.type === 'create_sale') {
+    const buyerName = text(value.buyerName, 80);
+    const vehicle = text(value.vehicle, 80);
+    const price = money(value.price);
+    if (!buyerName || !vehicle || !price) return null;
+    return {
+      type: 'create_sale',
+      buyerName,
+      vehicle,
+      price,
+      amountPaid: money(value.amountPaid) || 0,
+      paymentMethod: text(value.paymentMethod, 20) || 'Bank transfer',
+      buyerPhone: text(value.buyerPhone, 40),
+      saleDate: text(value.saleDate, 10)
+    };
+  }
+  if (value.type === 'add_vehicle') {
+    const make = text(value.make, 40);
+    const model = text(value.model, 60);
+    const year = Number(value.year);
+    if (!make || !model || !Number.isInteger(year) || year < 1950 || year > 2100) return null;
+    return {
+      type: 'add_vehicle',
+      make,
+      model,
+      year,
+      vin: text(value.vin, 32).toUpperCase(),
+      color: text(value.color, 30),
+      condition: text(value.condition, 20) || 'Tokunbo',
+      mileage: money(value.mileage) || 0,
+      askingPrice: money(value.askingPrice) || 0,
+      acquisitionCost: money(value.acquisitionCost) || 0,
+      clearing: money(value.clearing) || 0,
+      transport: money(value.transport) || 0,
+      repairs: money(value.repairs) || 0,
+      arrivalDate: text(value.arrivalDate, 10)
+    };
+  }
+  const number = text(value.number, 32).toUpperCase();
+  const buyerName = text(value.buyerName, 80);
+  if (!number && !buyerName) return null;
+  return {
+    type: 'open_document',
+    number,
+    buyerName,
+    kind: value.kind === 'invoice' || value.kind === 'receipt' ? value.kind : ''
+  };
 }
 
 export function describeStatus(status, payload) {
@@ -151,8 +213,9 @@ export function createAssistantClient({
 
         const payload = await readJson(response);
         const reply = typeof payload?.reply === 'string' ? payload.reply.trim() : '';
-        if (!reply) return { ok: false, code: 'empty-reply', message: ASSISTANT_COPY.unavailable };
-        return { ok: true, reply: reply.slice(0, 6000), sentAt: now() };
+        const action = readAction(payload?.action);
+        if (!reply && !action) return { ok: false, code: 'empty-reply', message: ASSISTANT_COPY.unavailable };
+        return { ok: true, reply: reply.slice(0, 6000), action, sentAt: now() };
       } catch (error) {
         const aborted = error?.name === 'AbortError';
         const offline = error?.name === 'TypeError';

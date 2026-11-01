@@ -15,7 +15,7 @@ A private, sign-in protected web desk for Akinlowo Global Investments and Autos:
 - Invoice and receipt print views you can print or save as PDF.
 - Expenses, supplier payables, VAT summaries, gross-profit estimates, CSV export.
 - Indicative USD/CAD/CNY/EUR → NGN rates, labelled as reference only.
-- A support assistant that answers "how do I…" questions about the desk.
+- An on-desk assistant that answers "how do I…" questions and prepares a sale, a new vehicle, or an existing invoice or receipt to open. It shows the figures first: nothing is saved until you press **Approve and save**.
 
 Nothing opens until someone signs in with a dealer account. Business records are
 stored in a Supabase database, not in the browser.
@@ -171,7 +171,8 @@ before pushing if you change code.
 - **The assistant can be wrong.** It is grounded in a written description of this
   desk and forbidden from inventing records, but it sometimes describes buttons or
   screens that do not exist. Treat it as a hint, and check the actual screen. It
-  cannot read or change your records.
+  cannot read your records, and an action it prepares reaches the database only when
+  you approve the card — check the buyer, price and vehicle on it before you do.
 - **VAT is off until you switch it on.** *Track VAT on this desk* in Settings is
   unticked, so sales have no VAT field and Finance shows no VAT figures. If you do
   charge VAT, tick it: the rate prefills each new sale and a sale's VAT is added only

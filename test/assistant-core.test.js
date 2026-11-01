@@ -7,26 +7,39 @@ import {
   SAFE_ERRORS,
   buildGroqPayload,
   buildSystemPrompt,
+  ASSISTANT_TOOLS,
   corsHeaders,
+  createAssistantHandler,
   createRateLimiter,
   errorBody,
+  extractMessage,
   extractReply,
   mapUpstreamStatus,
   parseAllowedOrigins,
+  readDeskAction,
   requestGroq,
   validatePayload
 } from '../supabase/functions/dealership-assistant/assistant-core.mjs';
 
 const user = content => ({ role: 'user', content });
 
-test('system prompt scopes the assistant to dealership support without invented data', () => {
+test('system prompt scopes the assistant to desk work without invented data', () => {
   const prompt = buildSystemPrompt();
   assert.match(prompt, /Never invent records/);
-  assert.match(prompt, /cannot perform actions/);
+  assert.match(prompt, /they do not save anything/);
+  assert.match(prompt, /nothing is written until they press Approve/);
   assert.match(prompt, /AGI-INV-YYYY-0001/);
   assert.match(prompt, /AGI-RCT-YYYY-0001/);
   assert.match(prompt, /customer personal data/);
   assert.match(prompt, /not tax advice/);
+});
+
+test('the prompt names the three tools and forbids claiming a saved record', () => {
+  const prompt = buildSystemPrompt();
+  for (const name of ['create_sale', 'add_vehicle', 'open_document']) assert.match(prompt, new RegExp(name));
+  assert.match(prompt, /ask one short question instead/);
+  assert.match(prompt, /It is prepared, and the person approves it/);
+  assert.match(prompt, /cannot edit or delete a saved record/);
 });
 
 test('the prompt forbids inventing numbering or screen behaviour', () => {
@@ -154,8 +167,9 @@ test('requestGroq sends the key only in the Authorization header', async () => {
     calls.push({ url, init });
     return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: 'Reply' } }] }) };
   };
-  const reply = await requestGroq({ apiKey: 'secret-key-value', body: { model: 'm' }, fetchImpl });
+  const { reply, action } = await requestGroq({ apiKey: 'secret-key-value', body: { model: 'm' }, fetchImpl });
   assert.equal(reply, 'Reply');
+  assert.equal(action, null);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, GROQ_URL);
   assert.equal(calls[0].init.headers.authorization, 'Bearer secret-key-value');
@@ -176,4 +190,137 @@ test('requestGroq times out a hanging provider', async () => {
     init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
   });
   await assert.rejects(requestGroq({ apiKey: 'k'.repeat(20), body: {}, fetchImpl, timeoutMs: 20 }), { code: 'upstream_unavailable' });
+});
+
+/* ------------------------------------------------------------------ *
+ * Desk actions: tools, normalisation and the reply contract.
+ * ------------------------------------------------------------------ */
+const toolCall = (name, args) => ({
+  type: 'function',
+  function: { name, arguments: typeof args === 'string' ? args : JSON.stringify(args) }
+});
+
+test('the tool schema exposes exactly the three desk actions', () => {
+  const names = ASSISTANT_TOOLS.map(tool => tool.function.name).sort();
+  assert.deepEqual(names, ['add_vehicle', 'create_sale', 'open_document']);
+  for (const tool of ASSISTANT_TOOLS) {
+    assert.equal(tool.type, 'function');
+    assert.equal(tool.function.parameters.type, 'object');
+    assert.equal(typeof tool.function.description, 'string');
+  }
+  const sale = ASSISTANT_TOOLS.find(tool => tool.function.name === 'create_sale');
+  assert.deepEqual(sale.function.parameters.required, ['buyer_name', 'vehicle', 'price']);
+});
+
+test('a sale tool call is normalised and clamped', () => {
+  const action = readDeskAction([toolCall('create_sale', {
+    buyer_name: '  Aisha Bello ',
+    vehicle: '2021 Toyota Camry',
+    price: 24500000,
+    amount_paid: 12000000,
+    payment_method: 'POS',
+    buyer_phone: '0803 555 0111'
+  })]);
+  assert.equal(action.type, 'create_sale');
+  assert.equal(action.buyerName, 'Aisha Bello');
+  assert.equal(action.price, 24500000);
+  assert.equal(action.amountPaid, 12000000);
+  assert.equal(action.paymentMethod, 'POS');
+
+  const overpaid = readDeskAction([toolCall('create_sale', {
+    buyer_name: 'A', vehicle: 'B', price: 100, amount_paid: 900
+  })]);
+  assert.equal(overpaid.amountPaid, 100, 'a payment above the price is capped, not written as a negative balance');
+  assert.equal(overpaid.paymentMethod, 'Bank transfer');
+});
+
+test('an incomplete sale is refused rather than filled with guesses', () => {
+  assert.equal(readDeskAction([toolCall('create_sale', { buyer_name: 'Aisha', vehicle: 'Camry' })]), null);
+  assert.equal(readDeskAction([toolCall('create_sale', { buyer_name: 'Aisha', price: 100 })]), null);
+  assert.equal(readDeskAction([toolCall('create_sale', { buyer_name: '   ', vehicle: 'Camry', price: 100 })]), null);
+  assert.equal(readDeskAction([toolCall('create_sale', { buyer_name: 'A', vehicle: 'B', price: -5 })]), null);
+  assert.equal(readDeskAction([toolCall('create_sale', { buyer_name: 'A', vehicle: 'B', price: 'lots' })]), null);
+});
+
+test('a vehicle call validates the year and defaults its costs', () => {
+  const action = readDeskAction([toolCall('add_vehicle', {
+    make: 'Lexus', model: 'RX 350', year: 2019, vin: '2t2bzca0kc123456', condition: 'Foreign used'
+  })]);
+  assert.equal(action.type, 'add_vehicle');
+  assert.equal(action.vin, '2T2BZCA0KC123456');
+  assert.equal(action.askingPrice, 0);
+  assert.equal(action.condition, 'Tokunbo', 'an unknown condition falls back to a real choice');
+  assert.equal(readDeskAction([toolCall('add_vehicle', { make: 'Lexus', model: 'RX', year: 1900 })]), null);
+  assert.equal(readDeskAction([toolCall('add_vehicle', { make: '', model: 'RX', year: 2019 })]), null);
+});
+
+test('a document call needs a number or a buyer and upper-cases the number', () => {
+  const byNumber = readDeskAction([toolCall('open_document', { number: 'agi-inv-2026-0002' })]);
+  assert.equal(byNumber.number, 'AGI-INV-2026-0002');
+  assert.equal(byNumber.kind, '');
+  const byBuyer = readDeskAction([toolCall('open_document', { buyer_name: 'Aisha Bello', kind: 'receipt' })]);
+  assert.equal(byBuyer.buyerName, 'Aisha Bello');
+  assert.equal(byBuyer.kind, 'receipt');
+  assert.equal(readDeskAction([toolCall('open_document', {})]), null);
+  assert.equal(readDeskAction([toolCall('open_document', { kind: 'quote' })]), null);
+});
+
+test('broken or unknown tool calls are ignored, not thrown', () => {
+  assert.equal(readDeskAction(null), null);
+  assert.equal(readDeskAction([]), null);
+  assert.equal(readDeskAction([toolCall('create_sale', '{not json')]), null);
+  assert.equal(readDeskAction([toolCall('drop_database', {})]), null);
+  const mixed = readDeskAction([
+    toolCall('create_sale', '{not json'),
+    toolCall('open_document', { number: 'AGI-RCT-2026-0001' })
+  ]);
+  assert.equal(mixed.type, 'open_document', 'the first usable call wins');
+});
+
+test('a tool-only reply is not treated as an empty response', () => {
+  const message = extractMessage({
+    choices: [{ message: { content: '', tool_calls: [toolCall('open_document', { number: 'AGI-INV-2026-0001' })] } }]
+  });
+  assert.equal(message.reply, '');
+  assert.equal(message.action.type, 'open_document');
+  assert.throws(() => extractMessage({ choices: [{ message: { content: '' } }] }), { code: 'upstream_bad_response' });
+});
+
+test('the handler returns the prepared action alongside the reply', async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      choices: [{
+        message: {
+          content: 'Prepared — approve it below.',
+          tool_calls: [toolCall('create_sale', { buyer_name: 'Aisha', vehicle: '2021 Camry', price: 24500000 })]
+        }
+      }]
+    })
+  });
+  const handle = createAssistantHandler({
+    authorize: async () => ({ id: 'u1', authorised: true }),
+    fetchImpl,
+    groqApiKey: 'k'.repeat(20),
+    allowedOrigins: ['https://dealer.example'],
+    now: () => 1000
+  });
+  const result = await handle({
+    method: 'POST',
+    origin: 'https://dealer.example',
+    authorization: `Bearer ${'t'.repeat(40)}`,
+    bodyText: JSON.stringify({ messages: [user('Sell the 2021 Camry to Aisha for 24.5m')] })
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.action.type, 'create_sale');
+  assert.equal(result.body.action.buyerName, 'Aisha');
+  assert.equal(result.body.reply, 'Prepared — approve it below.');
+});
+
+test('the Groq payload asks for tools and still carries no secret', () => {
+  const body = buildGroqPayload({ messages: [user('hello')] });
+  assert.equal(body.tool_choice, 'auto');
+  assert.ok(Array.isArray(body.tools) && body.tools.length === 3);
+  assert.equal(JSON.stringify(body).includes('apiKey'), false);
 });

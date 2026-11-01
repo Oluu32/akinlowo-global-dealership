@@ -8,8 +8,9 @@ A Supabase Edge Function (Deno) that answers questions about using the dealershi
 - Optionally restricts access to an email allowlist.
 - Restricts browser callers to an explicit origin allowlist (no wildcard CORS).
 - Applies per-user rate limiting, message/history/body limits and an upstream timeout.
-- Calls `https://api.groq.com/openai/v1/chat/completions` with a server-side key and a system prompt that scopes the assistant to this app, forbids invented records, forbids claiming actions, and forbids soliciting or repeating customer data.
-- Returns `{ "reply": "..." }`, or `{ "error": { "code", "message" } }` with a generic message. Provider bodies, keys and stack traces are never returned or logged.
+- Calls `https://api.groq.com/openai/v1/chat/completions` with a server-side key, a system prompt that scopes the assistant to this app, and a three-tool schema: `create_sale`, `add_vehicle`, `open_document`. The tools only prepare a proposal; the browser draws the approval card and the desk writes the record.
+- Normalises the first usable tool call into a tight action object, drops unknown tools and broken JSON, and refuses an action with a missing required field instead of guessing it.
+- Returns `{ "reply": "...", "action": { ... } }` — `action` is absent for a plain answer — or `{ "error": { "code", "message" } }` with a generic message. Provider bodies, keys and stack traces are never returned or logged.
 
 The function receives **only the text of the conversation** (`{ messages: [{ role, content }] }`). No vehicle, sale, customer, document or storage record is sent by the browser and no database access exists in this function.
 
