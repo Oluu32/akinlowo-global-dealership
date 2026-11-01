@@ -81,7 +81,7 @@ Rules enforced by the client:
 - Chat history is kept in page memory only, is cleared on sign-out, is never written to storage and disappears on reload.
 - Failures map to plain messages: invalid credentials, unavailable, busy, sign-in required, not authorised, message too long, offline, timed out.
 
-This gate protects the assistant only. The dealership records themselves remain local, unauthenticated and readable by anyone with access to the browser profile.
+In the full app the desk's own sign-in gate runs first, so the panel is only reachable with an active session; the gate described above remains for hosts that embed the panel on its own. Dealership records are not part of this function's data: they live in the `public.desk_state` row and are never read into a request.
 
 ## Limits
 

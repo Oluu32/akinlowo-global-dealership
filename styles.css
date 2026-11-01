@@ -669,3 +669,98 @@ textarea.input { min-height: 78px; resize: vertical; }
   .receipt-table tr { break-inside: avoid; }
   a { color: inherit; text-decoration: none; }
 }
+
+/* ---------- Whole-desk sign-in gate ---------- */
+body.desk-locked { overflow: hidden; }
+body.desk-locked .app-shell,
+body.desk-locked .tabbar,
+body.desk-locked .assistant-fab,
+body.desk-locked .assistant-panel,
+body.desk-locked #modal { display: none !important; }
+
+.desk-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px 18px;
+  overflow-y: auto;
+  background:
+    radial-gradient(900px 520px at 18% 12%, #1d3f74 0%, transparent 60%),
+    radial-gradient(700px 480px at 88% 88%, #12294f 0%, transparent 55%),
+    var(--navy-deep);
+}
+.desk-lock[hidden] { display: none; }
+.desk-lock-card {
+  width: min(430px, 100%);
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 28px 26px 24px;
+  box-shadow: 0 30px 70px rgba(4, 12, 26, .45);
+}
+.desk-lock-mark {
+  display: block;
+  width: 168px;
+  height: auto;
+  margin: 0 auto 16px;
+}
+.desk-lock-card h1 {
+  margin: 0 0 6px;
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 21px;
+  color: var(--navy);
+  text-align: center;
+}
+.desk-lock-lead {
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+.desk-lock-status {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--blue-soft);
+  color: var(--navy-mid);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+}
+.desk-lock-status[data-state="error"] { background: #fdecec; color: var(--red); }
+.desk-lock-status[data-state="busy"] { background: #fff6e6; color: var(--amber); }
+.desk-lock-form { display: grid; gap: 6px; }
+.desk-lock-form[hidden] { display: none; }
+.desk-lock-form label { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin-top: 6px; }
+.desk-lock-form .input { width: 100%; }
+.desk-lock-form .button { margin-top: 12px; width: 100%; }
+.desk-lock-form .button:disabled { opacity: .6; cursor: progress; }
+.desk-lock-error {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #fdecec;
+  color: var(--red);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.desk-lock-error[hidden] { display: none; }
+.desk-lock-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+.desk-user { font-size: 12px; color: var(--ink-soft); font-weight: 600; }
+.desk-user[hidden] { display: none; }
+.save-state { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.save-state[data-state="saved"] { color: var(--green); }
+.save-state[data-state="saving"] { color: var(--amber); }
+.save-state[data-state="error"] { color: var(--red); }
+@media (max-width: 560px) {
+  .desk-user { display: none; }
+  .save-state { max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

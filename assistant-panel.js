@@ -92,6 +92,21 @@ export function initAssistantPanel(scope = globalThis) {
 
   el('assistant-signout')?.addEventListener('click', () => { void signOut(); });
 
+  // The desk owns the session: signing in there must open the assistant, and
+  // signing out here must lock the whole app.
+  document.addEventListener('akinlowo:signed-in', () => {
+    history.length = 0;
+    ready = false;
+    refreshGate();
+  });
+
+  document.addEventListener('akinlowo:signed-out', () => {
+    if (isGated()) return;
+    history.length = 0;
+    ready = false;
+    refreshGate();
+  });
+
   refreshGate();
 }
 
@@ -126,7 +141,7 @@ function refreshGate({ announcement = '' } = {}) {
   if (!configured) {
     setStatus('off', 'Not configured', 'No assistant endpoint is configured for this deployment.');
   } else if (gated) {
-    setStatus('off', 'Sign-in required', 'Records stay in this browser; signing in only unlocks the assistant.');
+    setStatus('off', 'Sign-in required', 'Sign in to the desk to use the assistant.');
   } else if (injectedToken) {
     setStatus('ready', 'Ready', 'Messages are checked against your signed-in session.');
   } else {
@@ -147,7 +162,7 @@ function renderIntro() {
       'assistant',
       'Ask me how to use this desk — invoices, receipts, VAT, payments, stock or the rate panel. I cannot see your saved records and I cannot change anything for you.'
     );
-    appendBubble('assistant', 'Only the words you type are sent to the assistant service. Your vehicles, sales, customers, documents and every other saved record stay in this browser.');
+    appendBubble('assistant', 'Only the words you type are sent to the assistant service. Your vehicles, sales, customers, documents and every other saved record are never sent with a message.');
   } else {
     appendBubble('assistant', 'The assistant is not connected in this deployment. No messages are sent, and nothing on this page leaves your browser.');
   }
@@ -213,6 +228,7 @@ async function signOut() {
   history.length = 0;
   ready = false;
   refreshGate({ announcement: 'Signed out. Sign in again to use the assistant.' });
+  document.dispatchEvent(new CustomEvent('akinlowo:signed-out'));
   el('assistant-email')?.focus();
 }
 

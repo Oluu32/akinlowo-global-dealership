@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRates, fetchRates, readRateCache, writeRateCache, cacheIsFresh, FX_ENDPOINT, FX_CACHE_KEY } from '../fx.js';
+import { parseRates, fetchRates, cacheIsFresh, FX_ENDPOINT } from '../fx.js';
 
 const payload = () => ({
   result: 'success',
@@ -14,10 +14,6 @@ const payload = () => ({
   rates: { USD: 1, NGN: 1345.473177, CAD: 1.396601, CNY: 6.669566, EUR: 0.895588 }
 });
 
-function memoryStorage() {
-  const map = new Map();
-  return { getItem: key => (map.has(key) ? map.get(key) : null), setItem: (key, value) => map.set(key, String(value)), map };
-}
 
 test('parses the daily USD feed into NGN cross rates only', () => {
   const parsed = parseRates(payload(), 1_793_400_000_000);
@@ -62,25 +58,10 @@ test('surfaces HTTP failures instead of inventing rates', async () => {
   );
 });
 
-test('round-trips a saved copy and only treats recent copies as fresh', () => {
-  const storage = memoryStorage();
-  assert.equal(readRateCache(storage), null);
+test('only treats recent in-session rates as fresh', () => {
   const parsed = parseRates(payload(), 1_793_400_000_000);
-  assert.equal(writeRateCache(parsed, storage), true);
-  assert.ok(storage.map.get(FX_CACHE_KEY));
-  const cached = readRateCache(storage);
-  assert.equal(cached.ngn.CAD, 963.39);
-  assert.equal(cacheIsFresh(cached, 1_793_400_000_000 + 30 * 60 * 1000), true);
-  assert.equal(cacheIsFresh(cached, 1_793_400_000_000 + 2 * 60 * 60 * 1000), false);
-
-  storage.setItem(FX_CACHE_KEY, '{"base":"EUR"}');
-  assert.equal(readRateCache(storage), null);
-  storage.setItem(FX_CACHE_KEY, 'not json');
-  assert.equal(readRateCache(storage), null);
-});
-
-test('a blocked storage write does not break the rate panel', () => {
-  const storage = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('full'); } };
-  assert.equal(readRateCache(storage), null);
-  assert.equal(writeRateCache(parseRates(payload()), storage), false);
+  assert.equal(parsed.ngn.CAD, 963.39);
+  assert.equal(cacheIsFresh(parsed, 1_793_400_000_000 + 30 * 60 * 1000), true);
+  assert.equal(cacheIsFresh(parsed, 1_793_400_000_000 + 2 * 60 * 60 * 1000), false);
+  assert.equal(cacheIsFresh(null), false);
 });

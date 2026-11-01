@@ -1,8 +1,9 @@
 import { formatNaira, calculateSale, nextDocumentNumber, transitionVehicleStatus, landedCost, makeId, welcomeMessage, lagosDateTime, rateFreshness, RATE_CURRENCIES, LAGOS_TIME_ZONE } from './core.js';
-import { FX_SOURCE, fetchRates, readRateCache, writeRateCache, cacheIsFresh } from './fx.js';
+import { FX_SOURCE, fetchRates, cacheIsFresh } from './fx.js';
+import { readAuthConfig, createAuthClient, AUTH_COPY } from './auth-client.js';
+import { createDeskStore, normalizeDeskState, readLegacyState, clearLegacyState, stateHasRecords } from './desk-store.js';
 import { initAssistantPanel, setAssistant } from './assistant-panel.js';
 
-const STORE = 'akinlowo-global-dealership-v1';
 const business = {
   name: 'AKINLOWO GLOBAL INVESTMENTS AND AUTOS', rc: 'RC 1554770',
   address: '27 Street B3, Kuchiyako Ext Kuje Abuja Nigeria',
@@ -17,11 +18,12 @@ const demoState = () => ({
     { id: 'demo-car-3', year: 2021, make: 'Hyundai', model: 'Tucson', vin: '', mileage: 0, condition: 'Tokunbo', color: 'White', engine: '', plate: '', cNumber: '', arrivalDate: today(), askingPrice: 26500000, acquisitionCost: 22500000, clearing: 780000, transport: 200000, repairs: 150000, status: 'available', demo: true }
   ], sales: [], expenses: [], suppliers: [], documents: []
 });
-function loadState() {
-  try { const raw = localStorage.getItem(STORE); return raw ? { ...demoState(), ...JSON.parse(raw) } : demoState(); }
-  catch { return demoState(); }
-}
-let state = loadState();
+const authConfig = readAuthConfig();
+const auth = authConfig ? createAuthClient({ config: authConfig }) : null;
+const deskStore = authConfig && auth
+  ? createDeskStore({ url: authConfig.url, anonKey: authConfig.anonKey, getToken: () => auth.getAccessToken() })
+  : null;
+let state = normalizeDeskState(demoState());
 let currentRoute = location.hash.slice(1) || 'dashboard';
 const titleMap = { dashboard: 'Overview', inventory: 'Inventory', sales: 'Sales', finance: 'Finance', suppliers: 'Suppliers', documents: 'Invoices & receipts', settings: 'Settings' };
 const view = document.getElementById('view');
@@ -29,7 +31,49 @@ const modal = document.getElementById('modal');
 const modalContent = document.getElementById('modal-content');
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[ch]);
 const money = value => formatNaira(Number(value) || 0);
-const save = () => localStorage.setItem(STORE, JSON.stringify(state));
+const SAVE_DELAY_MS = 400;
+let saveTimer = null;
+let savingNow = false;
+let saveFailed = false;
+
+function setSaveStatus(text, kind = '') {
+  const el = document.getElementById('desk-save');
+  if (!el) return;
+  el.textContent = text;
+  if (kind) el.dataset.state = kind; else delete el.dataset.state;
+}
+
+async function flushSave() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  if (!deskStore) return false;
+  if (savingNow) { saveTimer = setTimeout(() => { void flushSave(); }, SAVE_DELAY_MS); return false; }
+  savingNow = true;
+  setSaveStatus('Saving…', 'saving');
+  try {
+    await deskStore.save(state);
+    saveFailed = false;
+    setSaveStatus('All changes saved', 'saved');
+    return true;
+  } catch (error) {
+    saveFailed = true;
+    setSaveStatus('Not saved · retry', 'error');
+    if (error?.code === 'auth') {
+      lockDesk(AUTH_COPY.expired, true);
+    } else {
+      toast(error?.message || 'Could not save to the dealership database');
+    }
+    return false;
+  } finally {
+    savingNow = false;
+  }
+}
+
+function save() {
+  setSaveStatus('Saving…', 'saving');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { void flushSave(); }, SAVE_DELAY_MS);
+}
 const vehicleName = v => `${v.year || ''} ${v.make || ''} ${v.model || ''}`.trim();
 const statusClass = s => `status-${String(s).toLowerCase().replaceAll(' ', '-')}`;
 const statusPill = s => `<span class="status-pill ${statusClass(s)}">${escapeHtml(s)}</span>`;
@@ -62,7 +106,7 @@ function heroMarkup() {
     <div class="hero-copy">
       <p class="hero-kicker"><i></i>Africa/Lagos · ${escapeHtml(welcome.timeLabel)}</p>
       <h2>${escapeHtml(welcome.title)}</h2>
-      <p class="hero-sub">${escapeHtml(welcome.subtitle)} ${welcome.name ? 'Your stock, sales and balances are summarised from records saved in this browser.' : 'Stock, sales and balances below are summarised from the records saved in this browser.'}</p>
+      <p class="hero-sub">${escapeHtml(welcome.subtitle)} ${welcome.name ? 'Your stock, sales and balances are summarised from the records saved to your dealership database.' : 'Stock, sales and balances below are summarised from the records saved to your dealership database.'}</p>
     </div>
     <div class="hero-side">
       <span class="hero-date">${escapeHtml(welcome.dateLabel)}</span>
@@ -73,8 +117,8 @@ function heroMarkup() {
 }
 
 /* ---------- Indicative daily NGN rates ---------- */
-let rates = readRateCache();
-let ratesStatus = rates ? 'ready' : 'loading';
+let rates = null;
+let ratesStatus = 'loading';
 let ratesError = '';
 let ratesRequest = null;
 
@@ -123,7 +167,7 @@ function ratesBodyMarkup() {
       </div>
       <div class="rates-meta">
         <span class="rates-updated" aria-live="polite">Provider last updated <b>${escapeHtml(updated)}</b></span>
-        ${offline ? '<span class="rates-updated">Showing the last saved copy from this device</span>' : ''}
+        ${offline ? '<span class="rates-updated">Showing the last rates loaded in this session</span>' : ''}
         ${retry}
       </div>
     </div>
@@ -159,7 +203,6 @@ async function loadRates(force = false) {
       rates = fresh;
       ratesError = '';
       ratesStatus = 'ready';
-      writeRateCache(fresh);
     } catch (error) {
       ratesError = error?.message || 'The rate request failed';
       ratesStatus = 'error';
@@ -180,10 +223,10 @@ function renderDashboard() {
   const profit=state.sales.reduce((a,s)=>a+(s.basePrice-(landedCost(state.vehicles.find(v=>v.id===s.vehicleId)||{})+(Number(s.vehicleExpense)||0))),0);
   const recent=[...state.sales].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
   const mix=[['Available',available,'#4274c4'],['Reserved',reserved,'#9376cb'],['Sold',state.vehicles.filter(v=>v.status==='sold').length,'#4a9b78']]; const max=Math.max(...mix.map(x=>x[1]),1);
-  view.innerHTML=`${heroMarkup()}<div class="grid stats-grid">${stat('Available stock',available,`${reserved} reserved · ${state.vehicles.filter(v=>v.status==='sold').length} sold`,'▤')}${stat('Inventory landed cost',money(stockValue),'Cost basis of unsold vehicles','₦')}${stat('Cash received',money(received),'Payments recorded in this browser','↗')}${stat('Outstanding balances',money(outstanding),`${state.sales.filter(s=>s.total>s.paidAmount).length} sale(s) with balance due`,'◷')}</div>
+  view.innerHTML=`${heroMarkup()}<div class="grid stats-grid">${stat('Available stock',available,`${reserved} reserved · ${state.vehicles.filter(v=>v.status==='sold').length} sold`,'▤')}${stat('Inventory landed cost',money(stockValue),'Cost basis of unsold vehicles','₦')}${stat('Cash received',money(received),'Payments recorded on this desk','↗')}${stat('Outstanding balances',money(outstanding),`${state.sales.filter(s=>s.total>s.paidAmount).length} sale(s) with balance due`,'◷')}</div>
   ${ratesCardMarkup()}
   <div class="grid split-grid"><section class="card panel"><div class="panel-title"><h3>Sales activity</h3><span>Last 6 months · NGN</span></div>${chartMarkup()}</section><section class="card panel"><div class="panel-title"><h3>Stock position</h3><span>${state.vehicles.length} vehicle(s)</span></div><div class="mix-list">${mix.map(([label,n])=>`<div><div class="mix-row"><span>${label}</span><strong>${n}</strong></div><div class="mix-track"><span style="width:${Math.round(n/max*100)}%"></span></div></div>`).join('')}<div class="mix-row"><span>Estimated realized gross profit</span><strong>${money(profit)}</strong></div></div></section></div>
-  <div class="section-head"><div><h2>Recent sales</h2><p>Sales and document balances recorded locally</p></div><button class="button button-quiet" data-route="sales">Open sales →</button></div>
+  <div class="section-head"><div><h2>Recent sales</h2><p>Sales and document balances from saved records</p></div><button class="button button-quiet" data-route="sales">Open sales →</button></div>
   <section class="card table-card">${recent.length?`<div class="table-scroll"><table><thead><tr><th>Sale / buyer</th><th>Vehicle</th><th>Date</th><th>Total</th><th>Balance</th><th>Status</th></tr></thead><tbody>${recent.map(s=>{const v=state.vehicles.find(x=>x.id===s.vehicleId)||{};return `<tr><td class="primary-cell">${escapeHtml(s.buyerName)}<span class="secondary-cell">${escapeHtml(s.invoiceNumber)}</span></td><td>${escapeHtml(vehicleName(v))}</td><td>${escapeHtml(s.date)}</td><td class="money">${money(s.total)}</td><td class="money">${money(s.total-s.paidAmount)}</td><td>${statusPill(s.paidAmount>=s.total?'paid':s.paidAmount?'part-paid':'due')}</td></tr>`}).join('')}</tbody></table></div>`:empty('No sales recorded yet','Add a sale when you are ready to create your first invoice.', '<button class="button button-primary" data-action="new-sale">Create sale</button>')}</section>`;
   void loadRates();
 }
@@ -205,21 +248,21 @@ function renderFinance() {
   const expenseCash=state.expenses.reduce((a,e)=>a+Number(e.amount||0),0); const supplierCash=state.suppliers.reduce((a,s)=>a+s.payments.reduce((b,p)=>b+p.amount,0),0); const cashOut=expenseCash+supplierCash;
   const realised=state.sales.reduce((a,s)=>{const v=state.vehicles.find(x=>x.id===s.vehicleId)||{};return a+s.basePrice-landedCost(v)-Number(s.vehicleExpense||0)},0);
   const outstanding=state.sales.reduce((a,s)=>a+Math.max(0,s.total-s.paidAmount),0); const payable=state.suppliers.reduce((a,s)=>a+Math.max(0,s.balance),0);
-  view.innerHTML=`<div class="section-head"><div><h2>Money in and out</h2><p>Operational summaries from records entered on this device</p></div><div class="toolbar"><button class="button button-secondary" data-action="export-csv">Export CSV</button><button class="button button-primary" data-action="add-expense">＋ Add expense</button></div></div>
+  view.innerHTML=`<div class="section-head"><div><h2>Money in and out</h2><p>Operational summaries from saved records</p></div><div class="toolbar"><button class="button button-secondary" data-action="export-csv">Export CSV</button><button class="button button-primary" data-action="add-expense">＋ Add expense</button></div></div>
   <div class="grid finance-grid">${[['Cash received',money(cashIn)],['Cash out recorded',money(cashOut)],['Sale balances due',money(outstanding)],['Supplier payables',money(payable)],['Output VAT recorded',money(outputVat)],['Input VAT entered',money(inputVat)],['VAT difference',money(outputVat-inputVat)],['Estimated gross profit',money(realised)],['Unsold stock cost',money(state.vehicles.filter(v=>v.status!=='sold').reduce((a,v)=>a+landedCost(v),0))]].map(([l,v])=>`<article class="card finance-card"><span>${l}</span><strong>${v}</strong></article>`).join('')}</div>
   <div class="grid two-panels"><section class="card panel"><div class="panel-title"><h3>Expense log</h3><button class="button button-quiet button-small" data-action="add-expense">Add expense</button></div>${state.expenses.length?`<div class="table-scroll"><table><thead><tr><th>Item</th><th>Date</th><th>Vehicle</th><th>Cash amount</th><th>Input VAT</th></tr></thead><tbody>${[...state.expenses].sort((a,b)=>b.date.localeCompare(a.date)).map(e=>`<tr><td class="primary-cell">${escapeHtml(e.description)}<span class="secondary-cell">${escapeHtml(e.category)}</span></td><td>${escapeHtml(e.date)}</td><td>${escapeHtml(vehicleName(state.vehicles.find(v=>v.id===e.vehicleId)||{})||'General')}</td><td class="money">${money(e.amount)}</td><td class="money">${money(e.inputVat)}</td></tr>`).join('')}</tbody></table></div>`:empty('No expenses entered','Vehicle and general expenses appear here.')}</section><section class="card panel"><div class="panel-title"><h3>Profit by completed sale</h3><span>Estimate before tax advice</span></div>${state.sales.length?`<div class="table-scroll"><table><thead><tr><th>Vehicle</th><th>Sale date</th><th>Landed cost</th><th>Sale price</th><th>Gross estimate</th></tr></thead><tbody>${state.sales.map(s=>{const v=state.vehicles.find(x=>x.id===s.vehicleId)||{};return `<tr><td>${escapeHtml(vehicleName(v))}</td><td>${escapeHtml(s.date)}</td><td class="money">${money(landedCost(v))}</td><td class="money">${money(s.basePrice)}</td><td class="money">${money(s.basePrice-landedCost(v)-Number(s.vehicleExpense||0))}</td></tr>`}).join('')}</tbody></table></div>`:empty('No realized sales yet','Gross estimates appear after sales are recorded.')}</section></div>
   <p class="small-note">VAT and profit figures are arithmetic summaries of entered data. They are not tax filings, statutory accounts or professional accounting advice.</p>`;
 }
 function renderSuppliers() {
   const due=state.suppliers.reduce((a,s)=>a+Math.max(0,s.balance),0);
-  view.innerHTML=`<div class="section-head"><div><h2>Supplier balances</h2><p>Track amounts owed and payments made · total open payable ${money(due)}</p></div><button class="button button-primary" data-action="add-supplier">＋ Add payable</button></div><section class="card table-card">${state.suppliers.length?`<div class="table-scroll"><table><thead><tr><th>Supplier</th><th>Reference</th><th>Due date</th><th>Original amount</th><th>Paid</th><th>Balance</th><th></th></tr></thead><tbody>${state.suppliers.map(s=>{const paid=s.payments.reduce((a,p)=>a+p.amount,0);return `<tr><td class="primary-cell">${escapeHtml(s.name)}</td><td>${escapeHtml(s.reference||'—')}</td><td>${escapeHtml(s.dueDate||'—')}</td><td class="money">${money(s.amount)}</td><td class="money">${money(paid)}</td><td class="money">${money(s.balance)}</td><td>${s.balance>0?`<button class="button button-quiet button-small" data-action="supplier-payment" data-id="${s.id}">Record payment</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:empty('No supplier payables','Add a payable to start tracking supplier balances.')}</section><p class="small-note">This is a simple local payable ledger. It does not reconcile bank balances or foreign-exchange movements.</p>`;
+  view.innerHTML=`<div class="section-head"><div><h2>Supplier balances</h2><p>Track amounts owed and payments made · total open payable ${money(due)}</p></div><button class="button button-primary" data-action="add-supplier">＋ Add payable</button></div><section class="card table-card">${state.suppliers.length?`<div class="table-scroll"><table><thead><tr><th>Supplier</th><th>Reference</th><th>Due date</th><th>Original amount</th><th>Paid</th><th>Balance</th><th></th></tr></thead><tbody>${state.suppliers.map(s=>{const paid=s.payments.reduce((a,p)=>a+p.amount,0);return `<tr><td class="primary-cell">${escapeHtml(s.name)}</td><td>${escapeHtml(s.reference||'—')}</td><td>${escapeHtml(s.dueDate||'—')}</td><td class="money">${money(s.amount)}</td><td class="money">${money(paid)}</td><td class="money">${money(s.balance)}</td><td>${s.balance>0?`<button class="button button-quiet button-small" data-action="supplier-payment" data-id="${s.id}">Record payment</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`:empty('No supplier payables','Add a payable to start tracking supplier balances.')}</section><p class="small-note">This is a simple payable ledger. It does not reconcile bank balances or foreign-exchange movements.</p>`;
 }
 function renderDocuments() {
   const docs=[...state.documents].sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   view.innerHTML=`<div class="section-head"><div><h2>Invoice and receipt register</h2><p>Invoices request payment; receipts record payments actually entered</p></div><button class="button button-primary" data-action="new-sale">＋ Create sale / invoice</button></div>${docs.length?`<div class="document-list">${docs.map(d=>{const s=state.sales.find(x=>x.id===d.saleId)||{};return `<article class="card document-row"><div><strong>${escapeHtml(d.number)} · ${d.kind==='invoice'?'Payment request invoice':'Payment receipt'}</strong><small>${escapeHtml(s.buyerName||'')} · ${escapeHtml(d.date)} · ${escapeHtml(vehicleName(state.vehicles.find(v=>v.id===s.vehicleId)||{}))}</small></div><div class="toolbar"><span class="money">${money(d.kind==='receipt'?d.paymentAmount:s.total)}</span><button class="button button-secondary button-small" data-action="open-document" data-id="${d.id}">Open / print</button></div></article>`}).join('')}</div>`:empty('No documents created','An invoice is generated when you record a sale. A receipt is generated only when a payment is recorded.')}`;
 }
 function renderSettings() {
-  view.innerHTML=`<section class="card settings-card"><h3>Business defaults</h3><p>Local settings apply to new sales saved in this browser. The VAT rate is editable and is not a tax-compliance claim.</p><form id="settings-form"><div class="form-grid"><div class="field"><label for="vat-rate">Default VAT rate (%)</label><input class="input" id="vat-rate" name="vatRate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(state.settings.vatRate)}" required></div><div class="field"><label>Default currency</label><input class="input" value="Nigerian naira (NGN / ₦)" readonly></div></div><div class="modal-actions"><button class="button button-primary">Save settings</button></div></form><div class="danger-zone"><h3>Demo data</h3><p>Clear all locally stored vehicles, sales, documents, expenses and supplier records, then restore the labelled sample vehicles.</p><button class="button button-danger" data-action="reset-demo">Reset local data</button></div></section><section class="card settings-card" style="margin-top:15px"><h3>Business identity on documents</h3><p><strong>${business.name}</strong><br>${business.rc}<br>${business.address}<br>${business.phones.join(' · ')}<br>${business.email}</p><span class="small-note">These details are included in generated print views. Verify them before issuing a customer document.</span></section>`;
+  view.innerHTML=`<section class="card settings-card"><h3>Business defaults</h3><p>These settings apply to new sales on this desk. The VAT rate is editable and is not a tax-compliance claim.</p><form id="settings-form"><div class="form-grid"><div class="field"><label for="vat-rate">Default VAT rate (%)</label><input class="input" id="vat-rate" name="vatRate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(state.settings.vatRate)}" required></div><div class="field"><label>Default currency</label><input class="input" value="Nigerian naira (NGN / ₦)" readonly></div></div><div class="modal-actions"><button class="button button-primary">Save settings</button></div></form><div class="danger-zone"><h3>Desk data</h3><p>Delete every saved vehicle, sale, document, expense and supplier record from the dealership database, then restore the labelled sample vehicles.</p><button class="button button-danger" data-action="reset-demo">Reset desk data</button></div></section><section class="card settings-card" style="margin-top:15px"><h3>Business identity on documents</h3><p><strong>${business.name}</strong><br>${business.rc}<br>${business.address}<br>${business.phones.join(' · ')}<br>${business.email}</p><span class="small-note">These details are included in generated print views. Verify them before issuing a customer document.</span></section>`;
   document.getElementById('settings-form').addEventListener('submit',e=>{e.preventDefault(); const rate=Number(new FormData(e.currentTarget).get('vatRate')); if(!Number.isFinite(rate)||rate<0||rate>100){toast('Enter a VAT rate from 0 to 100');return;}state.settings.vatRate=rate;save();toast('VAT default saved');render();});
 }
 function render() {
@@ -230,11 +273,11 @@ function render() {
 }
 function vehicleForm(vehicle={}) {
   const editing=!!vehicle.id; const statuses=['available','reserved','sold'];
-  return `<form id="vehicle-form" class="modal-form"><input type="hidden" name="id" value="${escapeHtml(vehicle.id||'')}"><h3 class="form-section-title">Vehicle identity</h3><div class="form-grid"><div class="field"><label>Year *</label><input class="input" name="year" type="number" min="1950" max="2100" value="${escapeHtml(vehicle.year||'')}" required></div><div class="field"><label>Make *</label><input class="input" name="make" value="${escapeHtml(vehicle.make||'')}" required></div><div class="field"><label>Model *</label><input class="input" name="model" value="${escapeHtml(vehicle.model||'')}" required></div><div class="field"><label>VIN / chassis number</label><input class="input" name="vin" value="${escapeHtml(vehicle.vin||'')}" maxlength="32"></div><div class="field"><label>Mileage (km)</label><input class="input" name="mileage" type="number" min="0" value="${escapeHtml(vehicle.mileage||0)}"></div><div class="field"><label>Condition</label><select name="condition" class="input">${['Tokunbo','Nigerian Used','Brand New'].map(x=>`<option ${vehicle.condition===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Exterior colour</label><input class="input" name="color" value="${escapeHtml(vehicle.color||'')}"></div><div class="field"><label>Engine number</label><input class="input" name="engine" value="${escapeHtml(vehicle.engine||'')}"></div><div class="field"><label>Plate number</label><input class="input" name="plate" value="${escapeHtml(vehicle.plate||'')}"></div><div class="field"><label>Customs C-number</label><input class="input" name="cNumber" value="${escapeHtml(vehicle.cNumber||'')}"></div><div class="field"><label>Arrival date</label><input class="input" name="arrivalDate" type="date" value="${escapeHtml(vehicle.arrivalDate||today())}"></div><div class="field"><label>Status</label><select class="input" name="status">${statuses.map(s=>`<option value="${s}" ${vehicle.status===s?'selected':''}>${s}</option>`).join('')}</select></div></div><hr class="form-divider"><h3 class="form-section-title">NGN cost and price</h3><div class="form-grid">${[['askingPrice','Asking price (₦)'],['acquisitionCost','Acquisition cost (₦)'],['clearing','Clearing (₦)'],['transport','Transport (₦)'],['repairs','Repairs (₦)']].map(([name,label])=>`<div class="field"><label>${label} *</label><input class="input" name="${name}" type="number" min="0" step="0.01" value="${escapeHtml(vehicle[name]||0)}" required></div>`).join('')}</div><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary">${editing?'Save vehicle':'Add vehicle'}</button></div></form>`;
+  return `<form id="vehicle-form" class="modal-form"><input type="hidden" name="recordId" value="${escapeHtml(vehicle.id||'')}"><h3 class="form-section-title">Vehicle identity</h3><div class="form-grid"><div class="field"><label>Year *</label><input class="input" name="year" type="number" min="1950" max="2100" value="${escapeHtml(vehicle.year||'')}" required></div><div class="field"><label>Make *</label><input class="input" name="make" value="${escapeHtml(vehicle.make||'')}" required></div><div class="field"><label>Model *</label><input class="input" name="model" value="${escapeHtml(vehicle.model||'')}" required></div><div class="field"><label>VIN / chassis number</label><input class="input" name="vin" value="${escapeHtml(vehicle.vin||'')}" maxlength="32"></div><div class="field"><label>Mileage (km)</label><input class="input" name="mileage" type="number" min="0" value="${escapeHtml(vehicle.mileage||0)}"></div><div class="field"><label>Condition</label><select name="condition" class="input">${['Tokunbo','Nigerian Used','Brand New'].map(x=>`<option ${vehicle.condition===x?'selected':''}>${x}</option>`).join('')}</select></div><div class="field"><label>Exterior colour</label><input class="input" name="color" value="${escapeHtml(vehicle.color||'')}"></div><div class="field"><label>Engine number</label><input class="input" name="engine" value="${escapeHtml(vehicle.engine||'')}"></div><div class="field"><label>Plate number</label><input class="input" name="plate" value="${escapeHtml(vehicle.plate||'')}"></div><div class="field"><label>Customs C-number</label><input class="input" name="cNumber" value="${escapeHtml(vehicle.cNumber||'')}"></div><div class="field"><label>Arrival date</label><input class="input" name="arrivalDate" type="date" value="${escapeHtml(vehicle.arrivalDate||today())}"></div><div class="field"><label>Status</label><select class="input" name="status">${statuses.map(s=>`<option value="${s}" ${vehicle.status===s?'selected':''}>${s}</option>`).join('')}</select></div></div><hr class="form-divider"><h3 class="form-section-title">NGN cost and price</h3><div class="form-grid">${[['askingPrice','Asking price (₦)'],['acquisitionCost','Acquisition cost (₦)'],['clearing','Clearing (₦)'],['transport','Transport (₦)'],['repairs','Repairs (₦)']].map(([name,label])=>`<div class="field"><label>${label} *</label><input class="input" name="${name}" type="number" min="0" step="0.01" value="${escapeHtml(vehicle[name]||0)}" required></div>`).join('')}</div><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary">${editing?'Save vehicle':'Add vehicle'}</button></div></form>`;
 }
 function saleForm() {
   const cars=state.vehicles.filter(v=>['available','reserved'].includes(v.status));
-  return `<form id="sale-form" class="modal-form"><h3 class="form-section-title">Select stock and buyer</h3><div class="form-grid"><div class="field full"><label>Vehicle *</label><select class="input" name="vehicleId" required>${cars.map(v=>`<option value="${v.id}">${escapeHtml(vehicleName(v))} · ${escapeHtml(v.status)} · ask ${money(v.askingPrice)}</option>`).join('')}</select>${cars.length?'':'<span class="error">No available or reserved cars. Add stock first.</span>'}</div><div class="field"><label>Buyer name *</label><input class="input" name="buyerName" required></div><div class="field"><label>Buyer phone</label><input class="input" name="buyerPhone" type="tel"></div><div class="field full"><label>Buyer address</label><input class="input" name="buyerAddress"></div><div class="field"><label>Sale date *</label><input class="input" name="date" type="date" value="${today()}" required></div><div class="field"><label>Sale price (₦) *</label><input class="input" name="price" type="number" min="0" step="0.01" required></div></div><hr class="form-divider"><h3 class="form-section-title">Payment and document</h3><div class="form-grid"><div class="field"><label class="checkbox-row"><input type="checkbox" name="vatEnabled"> Add VAT to this sale (optional, off by default)</label></div><div class="field"><label>VAT rate (%)</label><input class="input" name="vatRate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(state.settings.vatRate)}"></div><div class="field"><label>Amount received now (₦)</label><input class="input" name="paid" type="number" min="0" step="0.01" value="0"></div><div class="field"><label>Payment method</label><select class="input" name="paymentMethod"><option>Bank transfer</option><option>Cash</option><option>POS</option><option>Cheque</option><option>Other</option></select></div><div class="field full"><label>Sale terms</label><textarea class="input" name="terms" rows="3">Vehicle sold in the condition inspected by the buyer. Please retain this document for your records.</textarea></div><div class="field full"><label>Accessories / remarks</label><textarea class="input" name="remarks" rows="2"></textarea></div></div><p class="small-note">A numbered invoice requests the full sale amount. Any payment you enter is recorded separately and creates its own receipt. Both numbers are local to this browser.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary" ${cars.length?'':'disabled'}>Create sale & invoice</button></div></form>`;
+  return `<form id="sale-form" class="modal-form"><h3 class="form-section-title">Select stock and buyer</h3><div class="form-grid"><div class="field full"><label>Vehicle *</label><select class="input" name="vehicleId" required>${cars.map(v=>`<option value="${v.id}">${escapeHtml(vehicleName(v))} · ${escapeHtml(v.status)} · ask ${money(v.askingPrice)}</option>`).join('')}</select>${cars.length?'':'<span class="error">No available or reserved cars. Add stock first.</span>'}</div><div class="field"><label>Buyer name *</label><input class="input" name="buyerName" required></div><div class="field"><label>Buyer phone</label><input class="input" name="buyerPhone" type="tel"></div><div class="field full"><label>Buyer address</label><input class="input" name="buyerAddress"></div><div class="field"><label>Sale date *</label><input class="input" name="date" type="date" value="${today()}" required></div><div class="field"><label>Sale price (₦) *</label><input class="input" name="price" type="number" min="0" step="0.01" required></div></div><hr class="form-divider"><h3 class="form-section-title">Payment and document</h3><div class="form-grid"><div class="field"><label class="checkbox-row"><input type="checkbox" name="vatEnabled"> Add VAT to this sale (optional, off by default)</label></div><div class="field"><label>VAT rate (%)</label><input class="input" name="vatRate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(state.settings.vatRate)}"></div><div class="field"><label>Amount received now (₦)</label><input class="input" name="paid" type="number" min="0" step="0.01" value="0"></div><div class="field"><label>Payment method</label><select class="input" name="paymentMethod"><option>Bank transfer</option><option>Cash</option><option>POS</option><option>Cheque</option><option>Other</option></select></div><div class="field full"><label>Sale terms</label><textarea class="input" name="terms" rows="3">Vehicle sold in the condition inspected by the buyer. Please retain this document for your records.</textarea></div><div class="field full"><label>Accessories / remarks</label><textarea class="input" name="remarks" rows="2"></textarea></div></div><p class="small-note">A numbered invoice requests the full sale amount. Any payment you enter is recorded separately and creates its own receipt. Both numbers follow this desk's own sequence.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary" ${cars.length?'':'disabled'}>Create sale & invoice</button></div></form>`;
 }
 function expenseForm() { return `<form id="expense-form" class="modal-form"><div class="form-grid"><div class="field full"><label>Description *</label><input class="input" name="description" required></div><div class="field"><label>Category</label><select class="input" name="category"><option>Vehicle purchase</option><option>Clearing</option><option>Transport</option><option>Repairs</option><option>Office</option><option>Marketing</option><option>Other</option></select></div><div class="field"><label>Date *</label><input class="input" name="date" type="date" value="${today()}" required></div><div class="field"><label>Cash amount (₦) *</label><input class="input" name="amount" type="number" min="0" step="0.01" required></div><div class="field"><label>Input VAT included (₦)</label><input class="input" name="inputVat" type="number" min="0" step="0.01" value="0"></div><div class="field full"><label>Related vehicle (optional)</label><select class="input" name="vehicleId"><option value="">General expense</option>${state.vehicles.map(v=>`<option value="${v.id}">${escapeHtml(vehicleName(v))}</option>`).join('')}</select></div></div><p class="small-note">Enter cash amount and input VAT from your own records. This prototype does not determine tax eligibility.</p><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary">Save expense</button></div></form>`; }
 function supplierForm() { return `<form id="supplier-form" class="modal-form"><div class="form-grid"><div class="field"><label>Supplier name *</label><input class="input" name="name" required></div><div class="field"><label>Reference / invoice number</label><input class="input" name="reference"></div><div class="field"><label>Amount due (₦) *</label><input class="input" name="amount" type="number" min="0" step="0.01" required></div><div class="field"><label>Due date</label><input class="input" name="dueDate" type="date"></div></div><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary">Save payable</button></div></form>`; }
@@ -265,7 +308,7 @@ function documentPage(doc) {
 }
 function recordSalePayment(id) {
   const sale=state.sales.find(s=>s.id===id);if(!sale)return; const remaining=Number((sale.total-sale.paidAmount).toFixed(2));
-  openModal('Record customer payment',`Balance due ${money(remaining)}. A receipt will be generated for the amount received.`, `<form id="payment-form" class="modal-form"><input type="hidden" name="id" value="${sale.id}"><div class="form-grid"><div class="field"><label>Payment amount (₦) *</label><input class="input" name="amount" type="number" min="0.01" max="${remaining}" step="0.01" required></div><div class="field"><label>Payment method</label><select class="input" name="method"><option>Bank transfer</option><option>Cash</option><option>POS</option><option>Cheque</option><option>Other</option></select></div><div class="field"><label>Payment date</label><input class="input" name="date" type="date" value="${today()}" required></div></div><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary">Save payment & issue receipt</button></div></form>`);
+  openModal('Record customer payment',`Balance due ${money(remaining)}. A receipt will be generated for the amount received.`, `<form id="payment-form" class="modal-form"><input type="hidden" name="recordId" value="${sale.id}"><div class="form-grid"><div class="field"><label>Payment amount (₦) *</label><input class="input" name="amount" type="number" min="0.01" max="${remaining}" step="0.01" required></div><div class="field"><label>Payment method</label><select class="input" name="method"><option>Bank transfer</option><option>Cash</option><option>POS</option><option>Cheque</option><option>Other</option></select></div><div class="field"><label>Payment date</label><input class="input" name="date" type="date" value="${today()}" required></div></div><div class="modal-actions"><button type="button" class="button button-secondary" data-action="close-modal">Cancel</button><button class="button button-primary">Save payment & issue receipt</button></div></form>`);
 }
 function csvExport() {
   const rows=[['record_type','date','description','reference','amount_ngn','vat_ngn','balance_ngn']];
@@ -292,14 +335,15 @@ document.addEventListener('click',e=>{
   if(action==='supplier-payment'){const s=state.suppliers.find(x=>x.id===id);if(!s)return;const amount=prompt(`Payment to ${s.name}. Balance due ${money(s.balance)}. Enter amount in NGN:`);if(amount===null)return;const n=Number(amount);if(!Number.isFinite(n)||n<=0||n>s.balance){toast('Enter a positive amount no greater than the balance');return;}s.payments.push({amount:n,date:today()});s.balance=Number((s.balance-n).toFixed(2));save();render();toast('Supplier payment recorded');}
   if(action==='open-document'){const d=state.documents.find(x=>x.id===id);if(d)documentPage(d);}
   if(action==='export-csv')csvExport();
-  if(action==='reset-demo'){if(confirm('Clear all local records and restore the labelled demo vehicles? This cannot be undone.')){state=demoState();save();render();toast('Local data reset to demo stock');}}
+  if(action==='reset-demo'){if(confirm('Delete every saved record and restore the labelled demo vehicles? This cannot be undone.')){state=normalizeDeskState(demoState());state.initialised=true;save();render();toast('Desk data reset to demo stock');}}
 });
 
 document.addEventListener('submit',e=>{
   e.preventDefault();const f=e.target;
   try{
     if(f.id==='vehicle-form'){
-      const d=new FormData(f), data=Object.fromEntries(d.entries()), existing=state.vehicles.find(v=>v.id===data.id);
+      const d=new FormData(f), data=Object.fromEntries(d.entries()), existing=state.vehicles.find(v=>v.id===data.recordId);
+      delete data.recordId;
       for(const k of ['year','mileage','askingPrice','acquisitionCost','clearing','transport','repairs'])data[k]=Number(data[k]||0);
       if(data.year<1950||data.year>2100||['askingPrice','acquisitionCost','clearing','transport','repairs'].some(k=>data[k]<0))throw new Error('Check the vehicle year and amounts');
       if(existing){if(existing.status==='sold'&&data.status!=='sold')throw new Error('A sold vehicle cannot be moved back to stock');Object.assign(existing,data);existing.demo=false;}else state.vehicles.push({...data,id:makeId(),demo:false});
@@ -307,7 +351,7 @@ document.addEventListener('submit',e=>{
     }
     if(f.id==='sale-form'){const sale=submitSale(f);closeModal();render();toast(`Sale recorded · ${sale.invoiceNumber}`);}
     if(f.id==='payment-form'){
-      const d=new FormData(f),sale=state.sales.find(s=>s.id===d.get('id')),amount=Number(d.get('amount'));if(!sale)throw new Error('Sale record not found');const remaining=Number((sale.total-sale.paidAmount).toFixed(2));if(!Number.isFinite(amount)||amount<=0||amount>remaining)throw new Error('Payment must be positive and no greater than the balance');const method=String(d.get('method'));sale.payments.push({id:makeId(),amount,date:String(d.get('date')),method});sale.paidAmount=Number((sale.paidAmount+amount).toFixed(2));sale.paymentMethod=method;const doc=createDoc('receipt',{...sale,date:String(d.get('date'))},amount);sale.latestReceiptId=doc.id;save();closeModal();render();toast(`Payment saved · ${doc.number}`);
+      const d=new FormData(f),sale=state.sales.find(s=>s.id===d.get('recordId')),amount=Number(d.get('amount'));if(!sale)throw new Error('Sale record not found');const remaining=Number((sale.total-sale.paidAmount).toFixed(2));if(!Number.isFinite(amount)||amount<=0||amount>remaining)throw new Error('Payment must be positive and no greater than the balance');const method=String(d.get('method'));sale.payments.push({id:makeId(),amount,date:String(d.get('date')),method});sale.paidAmount=Number((sale.paidAmount+amount).toFixed(2));sale.paymentMethod=method;const doc=createDoc('receipt',{...sale,date:String(d.get('date'))},amount);sale.latestReceiptId=doc.id;save();closeModal();render();toast(`Payment saved · ${doc.number}`);
     }
     if(f.id==='expense-form'){const d=new FormData(f),item=Object.fromEntries(d.entries());item.id=makeId();item.amount=Number(item.amount);item.inputVat=Number(item.inputVat||0);if(item.amount<0||item.inputVat<0||item.inputVat>item.amount)throw new Error('Check expense and input VAT amounts');state.expenses.push(item);save();closeModal();render();toast('Expense saved');}
     if(f.id==='supplier-form'){const d=new FormData(f),item=Object.fromEntries(d.entries());item.id=makeId();item.amount=Number(item.amount);item.balance=item.amount;item.payments=[];if(item.amount<=0)throw new Error('Enter a payable amount greater than zero');state.suppliers.push(item);save();closeModal();render();toast('Supplier payable saved');}
@@ -322,6 +366,141 @@ document.addEventListener('click', e => {
   setAssistant(false);
 });
 modal.addEventListener('click',e=>{if(e.target===modal)closeModal();});
-window.addEventListener('hashchange',()=>{currentRoute=location.hash.slice(1)||'dashboard';render();});
+window.addEventListener('hashchange',()=>{currentRoute=location.hash.slice(1)||'dashboard';if(!document.body.classList.contains('desk-locked'))render();});
+
+/* ---------- Whole-desk sign-in gate and server storage ---------- */
+const lockPanel = document.getElementById('desk-lock');
+const lockForm = document.getElementById('desk-lock-form');
+const lockStatusEl = document.getElementById('desk-lock-status');
+const lockErrorEl = document.getElementById('desk-lock-error');
+const lockSubmit = document.getElementById('desk-lock-submit');
+const deskUserEl = document.getElementById('desk-user');
+const deskSignout = document.getElementById('desk-signout');
+
+function lockStatus(text, kind = '') {
+  if (!lockStatusEl) return;
+  lockStatusEl.textContent = text;
+  if (kind) lockStatusEl.dataset.state = kind; else delete lockStatusEl.dataset.state;
+}
+
+function lockError(message) {
+  if (!lockErrorEl) return;
+  lockErrorEl.textContent = message;
+  lockErrorEl.hidden = !message;
+}
+
+function lockDesk(message, isError = false) {
+  document.body.classList.add('desk-locked');
+  if (lockPanel) lockPanel.hidden = false;
+  if (lockForm) lockForm.hidden = false;
+  if (deskUserEl) deskUserEl.hidden = true;
+  if (deskSignout) deskSignout.hidden = true;
+  lockStatus(message, isError ? 'error' : '');
+  lockError('');
+  setAssistant(false);
+  if (saveFailed) setSaveStatus('Not saved', 'error');
+  document.getElementById('desk-lock-email')?.focus();
+}
+
+function unlockDesk(email) {
+  document.body.classList.remove('desk-locked');
+  if (lockPanel) lockPanel.hidden = true;
+  if (deskUserEl) { deskUserEl.textContent = email || 'Signed in'; deskUserEl.hidden = false; }
+  if (deskSignout) deskSignout.hidden = false;
+  document.dispatchEvent(new CustomEvent('akinlowo:signed-in'));
+}
+
+async function enterDesk() {
+  const email = auth?.getSession()?.user?.email ?? '';
+  lockStatus('Loading your desk from the dealership database…', 'busy');
+  try {
+    const loaded = await deskStore.load();
+    if (loaded?.state?.initialised) {
+      state = loaded.state;
+    } else {
+      const legacy = readLegacyState();
+      if (legacy && stateHasRecords(legacy)) {
+        state = normalizeDeskState(legacy);
+        state.initialised = true;
+        await deskStore.save(state);
+        const removed = clearLegacyState();
+        if (removed.length) toast('Records kept on this device were uploaded to the dealership database.');
+      } else {
+        state = normalizeDeskState(demoState());
+        state.initialised = true;
+        await deskStore.save(state);
+      }
+    }
+    state.initialised = true;
+    saveFailed = false;
+    unlockDesk(email);
+    setSaveStatus('All changes saved', 'saved');
+    render();
+    void loadRates();
+  } catch (error) {
+    if (error?.code === 'auth') {
+      auth.clearSession();
+      lockDesk(AUTH_COPY.expired, true);
+      return;
+    }
+    lockDesk(`The desk could not be loaded. ${error?.message || 'Try again in a moment.'}`, true);
+  }
+}
+
+lockForm?.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!auth) return;
+  const data = new FormData(lockForm);
+  lockError('');
+  lockSubmit.disabled = true;
+  lockSubmit.textContent = 'Signing in…';
+  lockStatus('Checking your account…', 'busy');
+  const result = await auth.signIn(String(data.get('email') ?? ''), String(data.get('password') ?? ''));
+  lockSubmit.disabled = false;
+  lockSubmit.textContent = 'Sign in';
+  if (!result.ok) {
+    lockStatus('Sign-in failed', 'error');
+    lockError(result.message);
+    return;
+  }
+  lockForm.reset();
+  await enterDesk();
+});
+
+async function endDeskSession(message = 'Signed out. Sign in to reopen the desk.') {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  state = normalizeDeskState(demoState());
+  closeModal();
+  setSaveStatus('');
+  lockDesk(message);
+}
+
+deskSignout?.addEventListener('click', async () => {
+  await auth?.signOut();
+  document.dispatchEvent(new CustomEvent('akinlowo:signed-out'));
+});
+
+document.addEventListener('akinlowo:signed-out', () => {
+  if (document.body.classList.contains('desk-locked')) return;
+  void endDeskSession();
+});
+
+document.getElementById('desk-save')?.addEventListener('click', () => { if (saveFailed) void flushSave(); });
+window.addEventListener('online', () => { if (saveFailed) void flushSave(); });
+
+function bootDesk() {
+  if (!authConfig || !auth || !deskStore) {
+    lockDesk('This deployment is not connected to a dealership database, so the desk cannot open.', true);
+    if (lockForm) lockForm.hidden = true;
+    return;
+  }
+  if (!auth.hasSession()) {
+    lockDesk('Sign in to open the dealership desk.');
+    return;
+  }
+  void enterDesk();
+}
+
 initAssistantPanel();
-save();render();
+bootDesk();

@@ -15,7 +15,6 @@ export const FX_SOURCE = Object.freeze({
   termsUrl: 'https://www.exchangerate-api.com/terms',
   docsUrl: 'https://www.exchangerate-api.com/docs/free'
 });
-export const FX_CACHE_KEY = 'akinlowo-global-fx-v1';
 export const FX_CACHE_TTL_MS = 60 * 60 * 1000;
 export const FX_TIMEOUT_MS = 9000;
 
@@ -64,28 +63,6 @@ export function fetchRates({ fetchImpl = globalThis.fetch, timeoutMs = FX_TIMEOU
     })
     .then(payload => parseRates(payload))
     .finally(() => { if (timer) clearTimeout(timer); });
-}
-
-export function readRateCache(storage = globalThis.localStorage) {
-  try {
-    const raw = storage?.getItem(FX_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || parsed.base !== 'USD' || typeof parsed.ngn !== 'object' || !Number.isFinite(parsed.lastUpdated)) return null;
-    if (!RATE_CURRENCIES.every(({ code }) => Number.isFinite(parsed.ngn?.[code]))) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-export function writeRateCache(data, storage = globalThis.localStorage) {
-  try {
-    storage?.setItem(FX_CACHE_KEY, JSON.stringify({ ...data, cachedAt: Date.now() }));
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export function cacheIsFresh(cache, now = Date.now(), ttlMs = FX_CACHE_TTL_MS) {
