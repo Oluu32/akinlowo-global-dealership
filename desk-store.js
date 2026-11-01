@@ -141,8 +141,11 @@ export function createDeskStore({ url, anonKey, getToken, fetchImpl = globalThis
       return { state, updatedAt: row.updated_at ?? null, hasRecords: stateHasRecords(state) };
     },
 
-    /** Writes the whole desk in one upsert; resolves once the server has it. */
-    async save(state) {
+    /**
+     * Writes the whole desk in one upsert; resolves once the server has it.
+     * `keepalive` lets a final save survive the page being closed.
+     */
+    async save(state, { keepalive = false } = {}) {
       const body = JSON.stringify([{
         id: DESK_ROW_ID,
         data: normalizeDeskState(state),
@@ -153,6 +156,7 @@ export function createDeskStore({ url, anonKey, getToken, fetchImpl = globalThis
         response = await request(`${DESK_ENDPOINT_PATH}?on_conflict=id`, {
           method: 'POST',
           headers: { prefer: 'resolution=merge-duplicates,return=minimal' },
+          keepalive,
           body
         });
       } catch (error) {

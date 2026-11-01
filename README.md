@@ -22,12 +22,13 @@ npm test
 
 - Responsive overview, inventory, sales, finance, supplier payable and document views.
 - Fixed desktop sidebar with the existing Akinlowo Global logo displayed on a light plate at a readable size, and a fixed bottom navigation bar on narrow phones.
-- Overview welcome driven by `Africa/Lagos` (WAT, UTC+1): time-based greeting, Lagos date/time and a shortcut into a new sale. The owner's name is used only when app data already contains one (for example `settings.ownerName`); otherwise the greeting stays generic. No name is invented or seeded.
+- Overview welcome driven by `Africa/Lagos` (WAT, UTC+1): time-based greeting, Lagos date/time and a shortcut into a new sale. The owner's name comes from the optional **Name used in the overview greeting** field in Settings; when it is blank the greeting stays generic. No name is invented or seeded.
 - Indicative NGN exchange-rate panel for USD, CAD, CNY and EUR with the provider's own last-updated time, a stale/unavailable status, the source link and an "indicative, not guaranteed transaction rates" note.
 - Vehicle stock records with VIN/chassis, condition, mileage, colour, engine/plate/customs identifiers, status, arrival date, acquisition cost, clearing, transport, repair costs and asking price.
 - Sale recording with optional editable VAT (off by default for a new sale), partial payments, remaining balances, duplicate-sale prevention and separate invoice/receipt numbering. Changing the default never rewrites an existing sale.
 - A4-friendly invoice and payment receipt print views using browser print / save as PDF, business details and an original vector logo mark.
-- Expense and supplier payable ledgers, payment records, VAT summaries, gross-profit estimates and CSV export.
+- Expense and supplier payable ledgers with a recorded payment form (amount, method, date), VAT summaries, gross-profit estimates and CSV export.
+- Corrections after a mistake: delete a sale (its invoice and receipts are removed and the vehicle returns to available stock), delete an expense, or delete a supplier payable. Issued invoice and receipt numbers are never reused, so a gap can appear in the sequence.
 - Records stored in Supabase Postgres (`public.desk_state`) and loaded only for a signed-in dealer, with clearly labelled fictional demo vehicles seeded on first use. No demo customers or real financial data are included in seed records.
 - A full-desk sign-in gate: nothing renders until a Supabase user session exists, and signing out locks the desk again. No business record is written to `localStorage`, `sessionStorage` or IndexedDB — only the auth session is kept, in `sessionStorage` for the tab.
 - A floating dealership support assistant that answers questions about using the desk (invoices, receipts, VAT, payments, stock, rates). It is gated behind a secure Supabase Edge Function and a server-side Groq key. Without a configured endpoint the panel stays open, labelled **Not configured**, and sends nothing.

@@ -31,8 +31,18 @@ test('system prompt scopes the assistant to dealership support without invented 
 
 test('the prompt forbids inventing numbering or screen behaviour', () => {
   const prompt = buildSystemPrompt();
-  assert.match(prompt, /never resets that counter/);
-  assert.match(prompt, /Do not extrapolate details such as when numbering counters reset/);
+  assert.match(prompt, /never restarts and never reuses a number/);
+  assert.match(prompt, /Do not invent buttons, menus, searches/);
+  assert.match(prompt, /Never write an example document number/);
+});
+
+test('the prompt describes the controls the desk actually has', () => {
+  const prompt = buildSystemPrompt();
+  assert.match(prompt, /Invoice \(opens the invoice print view\)/);
+  assert.match(prompt, /Record payment \(shown only while a balance remains/);
+  assert.match(prompt, /no search, sort, edit or send control/);
+  assert.match(prompt, /every signed-in account reads and edits the same desk/);
+  assert.match(prompt, /restores the labelled demo vehicles/);
 });
 
 test('validates a normal conversation and trims content', () => {

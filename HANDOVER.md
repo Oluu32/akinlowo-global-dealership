@@ -105,6 +105,10 @@ privately. There is no public sign-up page, so no stranger can create an account
 **Remove someone's access.** Same screen → the user → delete. Their session dies at
 the next load; records are untouched.
 
+**Correct a mistake.** Delete the wrong sale, expense or supplier payable from its row on the Sales, Finance or Suppliers screen and confirm. Deleting a sale removes its invoice and receipts and puts the vehicle back to available stock; invoice and receipt numbers already issued are not reused, so a gap stays in the sequence. Deleting a supplier payable also removes the payments recorded against it, and moves no money — adjust your bank records yourself.
+
+**Set the greeting name.** Settings → **Name used in the overview greeting**. Leave it blank and the desk stays generic.
+
 **Back up the records.** The desk lives in one row, so a backup is one export:
 
 - Supabase dashboard → **Table editor → desk_state** → the row menu → export as CSV/JSON, or

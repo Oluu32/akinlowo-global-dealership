@@ -135,6 +135,17 @@ test('saves the whole desk as one upsert keyed on the singleton row', async () =
   assert.equal('token' in body[0], false);
 });
 
+test('a final save can ask the browser to keep it alive while the page closes', async () => {
+  const fetchImpl = fakeFetch(() => ({ ok: true, status: 201, json: async () => null }));
+  const store = createDeskStore({ url: URL_BASE, anonKey: KEY, getToken: async () => 'user-jwt', fetchImpl });
+
+  await store.save({ vehicles: [] });
+  assert.equal(fetchImpl.calls[0].options.keepalive, false);
+
+  await store.save({ vehicles: [] }, { keepalive: true });
+  assert.equal(fetchImpl.calls[1].options.keepalive, true);
+});
+
 test('save refuses to swallow a rejected write', async () => {
   const store = createDeskStore({
     url: URL_BASE, anonKey: KEY, getToken: async () => 'user-jwt',
