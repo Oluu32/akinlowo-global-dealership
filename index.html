@@ -68,6 +68,12 @@
         <div class="top-actions">
           <span class="save-state" id="desk-save" role="status" aria-live="polite"></span>
           <span class="desk-user" id="desk-user" hidden></span>
+          <button class="button button-quiet button-small assistant-trigger" id="assistant-trigger" type="button" data-action="toggle-assistant" aria-expanded="false" aria-controls="assistant-panel" aria-label="Open the assistant panel (not configured)">
+            <span class="assistant-trigger-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12.2c0 3.7-3.6 6.7-8 6.7a9.3 9.3 0 0 1-2.7-.4L5 20l1-3.2a6.2 6.2 0 0 1-2-4.6c0-3.7 3.6-6.7 8-6.7s8 3 8 6.7z"/><path d="M9 11.6h.01M12 11.6h.01M15 11.6h.01"/></svg>
+            </span>
+            <span class="assistant-trigger-text">Assistant</span>
+          </button>
           <button class="button button-quiet button-small" id="desk-signout" type="button" hidden>Sign out</button>
           <span class="currency-badge">NGN <b>₦</b></span>
           <button class="button button-primary" data-action="new-sale">＋ New sale</button>
@@ -89,13 +95,6 @@
       <a href="#settings" data-route="settings"><span class="tab-icon" aria-hidden="true">⚙</span><span>Settings</span></a>
     </div>
   </nav>
-
-  <button class="assistant-fab" type="button" data-action="toggle-assistant" aria-expanded="false" aria-controls="assistant-panel" aria-label="Open the assistant panel (not configured)">
-    <span class="assistant-fab-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12.2c0 3.7-3.6 6.7-8 6.7a9.3 9.3 0 0 1-2.7-.4L5 20l1-3.2a6.2 6.2 0 0 1-2-4.6c0-3.7 3.6-6.7 8-6.7s8 3 8 6.7z"/><path d="M9 11.6h.01M12 11.6h.01M15 11.6h.01"/></svg>
-    </span>
-    <span class="assistant-fab-text">Assistant</span>
-  </button>
 
   <section class="assistant-panel" id="assistant-panel" role="dialog" aria-modal="false" aria-labelledby="assistant-title" hidden>
     <header class="assistant-head">

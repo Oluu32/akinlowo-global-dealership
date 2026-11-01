@@ -271,6 +271,11 @@ img { max-width: 100%; }
 .record-card-note { display: block; margin-top: 1px; color: #7d899c; font-size: 10px; font-weight: 400; }
 .record-card-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .record-card-actions .button { min-height: 34px; }
+/* Below this width the header cannot spare the word, so the chat icon stands in. */
+@media (max-width: 1180px) {
+  .assistant-trigger-text { display: none; }
+  .assistant-trigger { padding: 0 9px; }
+}
 /* The ledgers need about 810px of content; with the rail back at 861px the
  * table would scroll sideways, so cards take over for every narrower window. */
 @media (max-width: 1180px) {
@@ -362,37 +367,18 @@ textarea.input { min-height: 78px; resize: vertical; }
 .modal-head p { margin: 5px 0 0; color: #7a869a; font-size: 10px; line-height: 1.5; }
 
 /* ---------------------------------------------------------- assistant shell */
-.assistant-fab {
-  position: fixed;
-  z-index: 40;
-  right: 22px;
-  bottom: 22px;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 54px;
-  padding: 0 19px 0 16px;
-  border: 0;
-  border-radius: 999px;
-  color: #fff;
-  background: linear-gradient(145deg, #2f6fed, #173a7a);
-  box-shadow: 0 14px 30px rgba(23, 58, 122, .38);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .01em;
-  transition: transform .15s ease, box-shadow .15s ease;
-}
-.assistant-fab:hover { transform: translateY(-2px); box-shadow: 0 18px 36px rgba(23, 58, 122, .44); }
-.assistant-fab-icon { display: grid; width: 24px; height: 24px; place-items: center; }
-.assistant-fab-icon svg { width: 23px; height: 23px; }
-.assistant-fab-text { white-space: nowrap; }
+/* The assistant lives in the top bar, so it can never sit over a ledger row. */
+.assistant-trigger { gap: 6px; color: #2b4b86; }
+.assistant-trigger-icon { display: grid; width: 16px; height: 16px; place-items: center; }
+.assistant-trigger-icon svg { width: 15px; height: 15px; }
+.assistant-trigger-text { white-space: nowrap; }
 
 .assistant-panel {
   position: fixed;
   z-index: 45;
   right: 22px;
-  bottom: 90px;
+  top: 112px;
+  bottom: auto;
   display: flex;
   width: min(366px, calc(100vw - 32px));
   max-height: min(72vh, 560px);
@@ -626,8 +612,7 @@ textarea.input { min-height: 78px; resize: vertical; }
   .form-grid { gap: 11px 10px; }
   .field > label { font-size: 9px; }
   .input { font-size: 16px; }
-  .assistant-fab { right: 14px; bottom: calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom, 0px)); min-height: 52px; padding: 0 17px 0 14px; }
-  .assistant-panel { right: 10px; bottom: calc(var(--tabbar-h) + 76px + env(safe-area-inset-bottom, 0px)); left: 10px; width: auto; max-height: min(64vh, 520px); }
+  .assistant-panel { right: 10px; top: auto; bottom: calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom, 0px)); left: 10px; width: auto; max-height: min(64vh, 520px); }
   .toast { right: 12px; bottom: calc(var(--tabbar-h) + 78px + env(safe-area-inset-bottom, 0px)); left: 12px; max-width: none; }
 
   .receipt-shell { width: calc(100% - 20px); margin: 10px auto 20px; padding: 24px 20px; }
@@ -664,8 +649,6 @@ textarea.input { min-height: 78px; resize: vertical; }
   .modal-actions .button { flex: 1 1 auto; }
   .rates-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rate-value { font-size: 15.5px; }
-  .assistant-fab-text { display: none; }
-  .assistant-fab { padding: 0; width: 54px; min-height: 54px; justify-content: center; }
   .receipt-shell { padding: 18px 13px; }
   .receipt-head { flex-direction: column; }
   .receipt-meta { width: 100%; text-align: left; }
@@ -685,7 +668,7 @@ textarea.input { min-height: 78px; resize: vertical; }
 @media print {
   html, body { width: auto; min-width: 0; margin: 0; color: #17243d; background: #fff !important; font-size: 10pt; }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .no-print, .assistant-fab, .assistant-panel, .tabbar, .sidebar { display: none !important; }
+  .no-print, .assistant-panel, .tabbar, .sidebar { display: none !important; }
   .receipt-shell { width: 100%; max-width: none; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; }
   .receipt-head { break-inside: avoid; }
   .receipt-cols, .receipt-vehicle, .receipt-total, .receipt-terms, .signature-row { break-inside: avoid; }
@@ -699,7 +682,6 @@ textarea.input { min-height: 78px; resize: vertical; }
 body.desk-locked { overflow: hidden; }
 body.desk-locked .app-shell,
 body.desk-locked .tabbar,
-body.desk-locked .assistant-fab,
 body.desk-locked .assistant-panel,
 body.desk-locked #modal { display: none !important; }
 

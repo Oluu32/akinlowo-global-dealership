@@ -37,10 +37,10 @@ const el = id => document.getElementById(id);
 
 export function setAssistant(open) {
   const panel = el('assistant-panel');
-  const fab = document.querySelector('[data-action="toggle-assistant"]');
-  if (!panel || !fab) return;
+  const trigger = document.querySelector('[data-action="toggle-assistant"]');
+  if (!panel || !trigger) return;
   panel.hidden = !open;
-  fab.setAttribute('aria-expanded', String(open));
+  trigger.setAttribute('aria-expanded', String(open));
   if (!open) return;
   if (isGated()) el('assistant-email')?.focus();
   else if (configured) el('assistant-input')?.focus();
@@ -349,9 +349,9 @@ function setStatus(kind, label, note) {
   }
   const noteEl = el('assistant-status-note');
   if (noteEl) noteEl.textContent = note;
-  const fab = document.querySelector('.assistant-fab');
-  if (fab) {
-    fab.setAttribute('aria-label', configured
+  const trigger = document.querySelector('.assistant-trigger');
+  if (trigger) {
+    trigger.setAttribute('aria-label', configured
       ? 'Open the dealership assistant'
       : 'Open the assistant panel (not configured)');
   }
