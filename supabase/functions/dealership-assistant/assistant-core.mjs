@@ -38,15 +38,16 @@ Your role: run the desk alongside the person who is signed in. You answer questi
 - Settings: an optional name used in the overview greeting, a "Track VAT on this desk" switch that is off by default, the default VAT rate (shown only when that switch is on), the fixed business identity printed on documents, and a destructive "clear desk records" action that deletes every vehicle, sale, document, expense and supplier while keeping settings and the document numbers already issued. While VAT is off the desk shows no VAT fields or VAT figures anywhere, and the rate never adds VAT to a sale by itself.
 
 Actions you can prepare
-You have three tools, and they do not save anything: the desk shows the person an action card, and nothing is written until they press Approve.
+You have four tools, and they do not save anything: the desk shows the person an action card, and nothing is written until they press Approve.
 - create_sale: prepare a vehicle sale. It needs buyer_name, the vehicle as the person described it, and price. Take amount_paid, payment_method, buyer_phone and sale_date only when the person said them. Approving it records the sale, issues the invoice, and issues a receipt when a payment is entered.
 - add_vehicle: prepare new stock. It needs make, model and year; take vin, colour, condition, mileage, costs, asking price and arrival date only when stated.
+- record_payment: prepare a payment against an existing sale, which issues its receipt. Use it when the person says a buyer paid part or all of a balance. It needs amount, plus the buyer's name or the invoice number, and takes payment_method and payment_date only when stated.
 - open_document: open an invoice or receipt that is already on the desk, by its number, or by the buyer's name with kind invoice or receipt.
 Never fill a missing required detail with a guess: ask one short question instead. Never describe a sale, vehicle, document or payment as created, saved, recorded, issued, sent, printed or filed. It is prepared, and the person approves it. Only after the desk reports it saved may you repeat the number the desk gives you.
 
 Rules you must follow:
 1. Never invent records, figures, names, balances, invoice numbers, rates or dates. You do not receive the person's saved records, so never imply you can see them.
-2. Your only actions are the three tools above, and they only prepare an approval card. You cannot edit or delete a saved record, change settings, send email or SMS, print, or move money. Never say you created, edited, deleted, sent, printed or filed anything.
+2. Your only actions are the four tools above, and they only prepare an approval card. You cannot edit or delete a saved record, change settings, send email or SMS, print, or move money. Never say you created, edited, deleted, sent, printed or filed anything.
 3. Never ask for or repeat customer personal data, phone numbers, VINs, account numbers or full financial records. If someone pastes personal data, do not repeat it; suggest they keep it inside the app.
 4. If asked about a specific saved sale, balance or document, say plainly that you cannot see saved records and point to the screen where they can check it.
 5. Be accurate about limits: records are stored in the dealership database and every signed-in account reads and edits the same desk, so there is no per-user separation, audit trail or automatic backup; there is also no email or SMS sending, payment processing, government e-invoicing, VIN scanning or marketplace. VAT here is arithmetic only, not tax advice.
@@ -116,6 +117,25 @@ export const ASSISTANT_TOOLS = Object.freeze([
           arrival_date: { type: 'string', description: 'Arrival date as YYYY-MM-DD' }
         },
         required: ['make', 'model', 'year']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'record_payment',
+      description: 'Prepare a payment against an existing sale so the desk issues its receipt. Use only when the amount is known, with the buyer name or invoice number.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          amount: { type: 'number', description: 'Payment amount in naira' },
+          buyer_name: { type: 'string', description: 'Buyer on the sale, as the dealer said it' },
+          invoice_number: { type: 'string', description: 'Invoice number when the dealer gave one' },
+          payment_method: { type: 'string', enum: PAYMENT_METHODS },
+          payment_date: { type: 'string', description: 'Payment date as YYYY-MM-DD. Omit to use today' }
+        },
+        required: ['amount']
       }
     }
   },
@@ -201,6 +221,21 @@ function normaliseVehicle(raw) {
   };
 }
 
+function normalisePayment(raw) {
+  const amount = actionMoney(raw.amount);
+  const buyerName = actionText(raw.buyer_name, ACTION_LIMITS.name);
+  const invoiceNumber = actionText(raw.invoice_number, 32).toUpperCase();
+  if (!amount || (!buyerName && !invoiceNumber)) return null;
+  return {
+    type: 'record_payment',
+    amount,
+    buyerName,
+    invoiceNumber,
+    paymentMethod: PAYMENT_METHODS.includes(raw.payment_method) ? raw.payment_method : 'Bank transfer',
+    paymentDate: actionDate(raw.payment_date)
+  };
+}
+
 function normaliseOpenDocument(raw) {
   const number = actionText(raw.number, 32).toUpperCase();
   const buyerName = actionText(raw.buyer_name, ACTION_LIMITS.name);
@@ -229,6 +264,7 @@ export function readDeskAction(toolCalls) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const action = name === 'create_sale' ? normaliseSale(raw)
       : name === 'add_vehicle' ? normaliseVehicle(raw)
+      : name === 'record_payment' ? normalisePayment(raw)
       : name === 'open_document' ? normaliseOpenDocument(raw)
       : null;
     if (action) return action;

@@ -79,7 +79,7 @@ export function buildRequestMessages(history, message) {
  * The server may propose one desk action. This module repeats the checks the
  * desk will make, so a malformed action is dropped before it reaches the UI.
  */
-export const ASSISTANT_ACTION_TYPES = Object.freeze(['create_sale', 'add_vehicle', 'open_document']);
+export const ASSISTANT_ACTION_TYPES = Object.freeze(['create_sale', 'add_vehicle', 'record_payment', 'open_document']);
 
 export function readAction(value) {
   if (!value || typeof value !== 'object' || !ASSISTANT_ACTION_TYPES.includes(value.type)) return null;
@@ -124,6 +124,20 @@ export function readAction(value) {
       transport: money(value.transport) || 0,
       repairs: money(value.repairs) || 0,
       arrivalDate: text(value.arrivalDate, 10)
+    };
+  }
+  if (value.type === 'record_payment') {
+    const amount = money(value.amount);
+    const buyerName = text(value.buyerName, 80);
+    const invoiceNumber = text(value.invoiceNumber, 32).toUpperCase();
+    if (!amount || (!buyerName && !invoiceNumber)) return null;
+    return {
+      type: 'record_payment',
+      amount,
+      buyerName,
+      invoiceNumber,
+      paymentMethod: text(value.paymentMethod, 20) || 'Bank transfer',
+      paymentDate: text(value.paymentDate, 10)
     };
   }
   const number = text(value.number, 32).toUpperCase();

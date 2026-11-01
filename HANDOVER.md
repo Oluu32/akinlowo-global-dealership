@@ -15,7 +15,7 @@ A private, sign-in protected web desk for Akinlowo Global Investments and Autos:
 - Invoice and receipt print views you can print or save as PDF.
 - Expenses, supplier payables, VAT summaries, gross-profit estimates, CSV export.
 - Indicative USD/CAD/CNY/EUR → NGN rates, labelled as reference only.
-- An on-desk assistant that answers "how do I…" questions and prepares a sale, a new vehicle, or an existing invoice or receipt to open. It shows the figures first: nothing is saved until you press **Approve and save**.
+- An on-desk assistant that answers "how do I…" questions, answers stock and balance questions from the records already open on the page, and prepares a sale, a new vehicle, a payment against a sale's balance, or an existing invoice or receipt to open. It shows the figures first: nothing is saved until you press **Approve and save**.
 
 Nothing opens until someone signs in with a dealer account. Business records are
 stored in a Supabase database, not in the browser.

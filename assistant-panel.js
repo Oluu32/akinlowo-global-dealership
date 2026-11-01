@@ -6,6 +6,7 @@ import {
   isAllowedEndpoint
 } from './assistant-client.js';
 import { AUTH_COPY, createAuthClient, readAuthConfig } from './auth-client.js';
+import { answerDeskQuestion } from './desk-insights.js';
 
 /**
  * Floating assistant panel with an optional sign-in gate.
@@ -172,7 +173,7 @@ function renderIntro() {
   if (configured) {
     appendBubble(
       'assistant',
-      'Ask me how to use this desk, or tell me what to record — a sale with its invoice and receipt, or a new vehicle. I prepare the record and you approve it on the card; nothing is saved until you do. I still cannot see your saved records.'
+      'Ask about your own records — stock, what is owed, sales, profit — and I answer from the desk on this screen, without sending anything. Ask how to use the desk, or tell me what to record: a sale with its invoice and receipt, a new vehicle, or a payment. I prepare the record and you approve it on the card; nothing is saved until you do.'
     );
     appendBubble('assistant', 'Only the words you type are sent to the assistant service. Your vehicles, sales, customers, documents and every other saved record are never sent with a message.');
   } else {
@@ -274,6 +275,21 @@ async function sendMessage(raw) {
   }
   if (message.length > ASSISTANT_MAX_CHARS) {
     setStatus('warn', 'Message too long', `Keep messages under ${ASSISTANT_MAX_CHARS} characters.`);
+    return;
+  }
+
+  // Record questions are answered from the state already on this screen, so
+  // the figures are exact and nothing about the records is transmitted.
+  const local = deskAnswer(message);
+  if (local) {
+    if (input) input.value = '';
+    appendBubble('user', message);
+    appendBubble('assistant', local);
+    history.push({ role: 'user', content: message }, { role: 'assistant', content: local });
+    if (history.length > ASSISTANT_MAX_HISTORY) history.splice(0, history.length - ASSISTANT_MAX_HISTORY);
+    ready = true;
+    setStatus('ready', 'Answered here', 'Read from the records already open on this desk. Nothing was sent.');
+    syncComposer();
     return;
   }
 
@@ -394,6 +410,18 @@ function summariseAction(action) {
         ['Condition', action.condition]
       ],
       note: 'Approve to add this vehicle to available stock. Fill in anything missing afterwards from Inventory.'
+    };
+  }
+  if (action.type === 'record_payment') {
+    return {
+      kicker: 'Payment ready for approval',
+      title: action.invoiceNumber || action.buyerName,
+      rows: [
+        ['Amount', naira(action.amount)],
+        ['Method', action.paymentMethod],
+        ['For', action.invoiceNumber ? `invoice ${action.invoiceNumber}` : action.buyerName]
+      ],
+      note: 'Approve to record this payment and issue its receipt. The desk refuses an amount larger than the balance still due.'
     };
   }
   return {
@@ -538,6 +566,16 @@ function setStatus(kind, label, note) {
     trigger.setAttribute('aria-label', configured
       ? 'Open the dealership assistant'
       : 'Open the assistant panel (not configured)');
+  }
+}
+
+function deskAnswer(message) {
+  const read = globalThis.AKINLOWO_DESK_READ;
+  if (typeof read !== 'function') return '';
+  try {
+    return answerDeskQuestion(message, read()) || '';
+  } catch {
+    return '';
   }
 }
 

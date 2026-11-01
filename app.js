@@ -302,6 +302,17 @@ function createDoc(kind,sale,paymentAmount=0) {
   const doc={id:makeId(),kind,number:n.number,date:sale.date,createdAt:new Date().toISOString(),saleId:sale.id,paymentAmount:Number(paymentAmount)||0}; state.documents.push(doc); return doc;
 }
 const SALE_TERMS_DEFAULT='Vehicle sold in the condition inspected by the buyer. Please retain this document for your records.';
+function recordPayment(sale,{amount,method,date}) {
+  const remaining=Number((sale.total-sale.paidAmount).toFixed(2));
+  if(!Number.isFinite(amount)||amount<=0||amount>remaining) throw new Error('Payment must be positive and no greater than the balance');
+  sale.payments.push({id:makeId(),amount,date,method});
+  sale.paidAmount=Number((sale.paidAmount+amount).toFixed(2));
+  sale.paymentMethod=method;
+  const doc=createDoc('receipt',{...sale,date},amount);
+  sale.latestReceiptId=doc.id;
+  save();
+  return {sale,doc};
+}
 function recordSale(input) {
   const vehicle=input.vehicle, paid=Number(input.paid||0), rate=Number(input.vatRate||0), vatEnabled=input.vatEnabled===true;
   if(!vehicle||!['available','reserved'].includes(vehicle.status)) throw new Error('That vehicle is no longer available for sale');
@@ -394,7 +405,7 @@ document.addEventListener('submit',e=>{
     }
     if(f.id==='sale-form'){const sale=submitSale(f);closeModal();render();toast(`Sale recorded · ${sale.invoiceNumber}`);}
     if(f.id==='payment-form'){
-      const d=new FormData(f),sale=state.sales.find(s=>s.id===d.get('recordId')),amount=Number(d.get('amount'));if(!sale)throw new Error('Sale record not found');const remaining=Number((sale.total-sale.paidAmount).toFixed(2));if(!Number.isFinite(amount)||amount<=0||amount>remaining)throw new Error('Payment must be positive and no greater than the balance');const method=String(d.get('method'));sale.payments.push({id:makeId(),amount,date:String(d.get('date')),method});sale.paidAmount=Number((sale.paidAmount+amount).toFixed(2));sale.paymentMethod=method;const doc=createDoc('receipt',{...sale,date:String(d.get('date'))},amount);sale.latestReceiptId=doc.id;save();closeModal();render();toast(`Payment saved · ${doc.number}`);
+      const d=new FormData(f),sale=state.sales.find(s=>s.id===d.get('recordId'));if(!sale)throw new Error('Sale record not found');const {doc}=recordPayment(sale,{amount:Number(d.get('amount')),method:String(d.get('method')),date:String(d.get('date'))});closeModal();render();toast(`Payment saved · ${doc.number}`);
     }
     if(f.id==='expense-form'){const d=new FormData(f),item=Object.fromEntries(d.entries());item.id=makeId();item.amount=Number(item.amount);item.inputVat=Number(item.inputVat||0);if(item.amount<0||item.inputVat<0||item.inputVat>item.amount)throw new Error('Check expense and input VAT amounts');state.expenses.push(item);save();closeModal();render();toast('Expense saved');}
     if(f.id==='supplier-form'){const d=new FormData(f),item=Object.fromEntries(d.entries());item.id=makeId();item.amount=Number(item.amount);item.balance=item.amount;item.payments=[];if(item.amount<=0)throw new Error('Enter a payable amount greater than zero');state.suppliers.push(item);save();closeModal();render();toast('Supplier payable saved');}
@@ -408,6 +419,10 @@ document.addEventListener('submit',e=>{
     }
   }catch(err){const old=f.querySelector('.error-message');if(old)old.remove();const note=document.createElement('p');note.className='error error-message';note.textContent=err.message||'Could not save this record';f.append(note);}
 });
+/* Read-only window onto the loaded desk for the assistant panel's own record
+ * answers. It never sends anything; the panel computes locally. */
+globalThis.AKINLOWO_DESK_READ = () => state;
+
 /* ---------- Assistant desk actions: prepared by the assistant, applied here ---------- */
 function matchStockVehicle(query) {
   const q=String(query||'').toLowerCase().replace(/\s+/g,' ').trim(); if(!q) return [];
@@ -436,6 +451,19 @@ function applyDeskAction(action) {
     const record={make:action.make,model:action.model,year:Number(action.year),vin:action.vin||'',color:action.color||'',condition:action.condition||'Tokunbo',mileage:Number(action.mileage)||0,askingPrice:Number(action.askingPrice)||0,acquisitionCost:Number(action.acquisitionCost)||0,clearing:Number(action.clearing)||0,transport:Number(action.transport)||0,repairs:Number(action.repairs)||0,arrivalDate:action.arrivalDate||today(),status:'available',engine:'',plate:'',cNumber:''};
     state.vehicles.push({...record,id:makeId()}); save(); render();
     return {message:`Stock updated · ${vehicleName(record)} added as available.`};
+  }
+  if(action.type==='record_payment'){
+    const invoiceKey=String(action.invoiceNumber||'').toUpperCase();
+    const name=String(action.buyerName||'').toLowerCase().trim();
+    let matches=invoiceKey?state.sales.filter(s=>String(s.invoiceNumber||'').toUpperCase()===invoiceKey):[];
+    if(!matches.length&&name){const exact=state.sales.filter(s=>String(s.buyerName||'').toLowerCase().trim()===name);matches=exact.length?exact:state.sales.filter(s=>String(s.buyerName||'').toLowerCase().includes(name));}
+    if(!matches.length) throw new Error(`No sale on this desk matches ${action.invoiceNumber||action.buyerName}.`);
+    if(matches.length>1) throw new Error(`That matches ${matches.length} sales. Record the payment from Sales so you can pick the right one.`);
+    const sale=matches[0], remaining=Number((sale.total-sale.paidAmount).toFixed(2));
+    if(action.amount>remaining) throw new Error(`${money(action.amount)} is more than the ${money(remaining)} balance on ${sale.invoiceNumber}. Record a smaller amount or open Sales.`);
+    const {doc}=recordPayment(sale,{amount:action.amount,method:action.paymentMethod,date:action.paymentDate||today()});
+    render();
+    return {message:`Receipt ${doc.number} issued · ${money(action.amount)} against ${sale.invoiceNumber}. ${money(Math.max(0,sale.total-sale.paidAmount))} still due.`,documentNumber:doc.number};
   }
   if(action.type==='open_document'){
     const doc=findDeskDocument(action);

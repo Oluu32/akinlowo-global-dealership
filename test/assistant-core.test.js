@@ -36,7 +36,7 @@ test('system prompt scopes the assistant to desk work without invented data', ()
 
 test('the prompt names the three tools and forbids claiming a saved record', () => {
   const prompt = buildSystemPrompt();
-  for (const name of ['create_sale', 'add_vehicle', 'open_document']) assert.match(prompt, new RegExp(name));
+  for (const name of ['create_sale', 'add_vehicle', 'record_payment', 'open_document']) assert.match(prompt, new RegExp(name));
   assert.match(prompt, /ask one short question instead/);
   assert.match(prompt, /It is prepared, and the person approves it/);
   assert.match(prompt, /cannot edit or delete a saved record/);
@@ -200,9 +200,9 @@ const toolCall = (name, args) => ({
   function: { name, arguments: typeof args === 'string' ? args : JSON.stringify(args) }
 });
 
-test('the tool schema exposes exactly the three desk actions', () => {
+test('the tool schema exposes exactly the four desk actions', () => {
   const names = ASSISTANT_TOOLS.map(tool => tool.function.name).sort();
-  assert.deepEqual(names, ['add_vehicle', 'create_sale', 'open_document']);
+  assert.deepEqual(names, ['add_vehicle', 'create_sale', 'open_document', 'record_payment']);
   for (const tool of ASSISTANT_TOOLS) {
     assert.equal(tool.type, 'function');
     assert.equal(tool.function.parameters.type, 'object');
@@ -321,6 +321,23 @@ test('the handler returns the prepared action alongside the reply', async () => 
 test('the Groq payload asks for tools and still carries no secret', () => {
   const body = buildGroqPayload({ messages: [user('hello')] });
   assert.equal(body.tool_choice, 'auto');
-  assert.ok(Array.isArray(body.tools) && body.tools.length === 3);
+  assert.ok(Array.isArray(body.tools) && body.tools.length === 4);
   assert.equal(JSON.stringify(body).includes('apiKey'), false);
+});
+
+test('a payment call needs an amount and a way to find the sale', () => {
+  const byBuyer = readDeskAction([toolCall('record_payment', { amount: 5000000, buyer_name: 'Aisha Bello', payment_method: 'Cash' })]);
+  assert.equal(byBuyer.type, 'record_payment');
+  assert.equal(byBuyer.amount, 5000000);
+  assert.equal(byBuyer.buyerName, 'Aisha Bello');
+  assert.equal(byBuyer.paymentMethod, 'Cash');
+
+  const byInvoice = readDeskAction([toolCall('record_payment', { amount: '2500000', invoice_number: 'agi-inv-2026-0002' })]);
+  assert.equal(byInvoice.invoiceNumber, 'AGI-INV-2026-0002');
+  assert.equal(byInvoice.paymentMethod, 'Bank transfer');
+
+  assert.equal(readDeskAction([toolCall('record_payment', { buyer_name: 'Aisha' })]), null);
+  assert.equal(readDeskAction([toolCall('record_payment', { amount: 0, buyer_name: 'Aisha' })]), null);
+  assert.equal(readDeskAction([toolCall('record_payment', { amount: -1, buyer_name: 'Aisha' })]), null);
+  assert.equal(readDeskAction([toolCall('record_payment', { amount: 100 })]), null);
 });
