@@ -29,6 +29,12 @@ test('system prompt scopes the assistant to dealership support without invented 
   assert.match(prompt, /not tax advice/);
 });
 
+test('the prompt forbids inventing numbering or screen behaviour', () => {
+  const prompt = buildSystemPrompt();
+  assert.match(prompt, /never resets that counter/);
+  assert.match(prompt, /Do not extrapolate details such as when numbering counters reset/);
+});
+
 test('validates a normal conversation and trims content', () => {
   const result = validatePayload({ messages: [user('  How do I create an invoice?  ')] });
   assert.equal(result.ok, true);
