@@ -45,7 +45,7 @@ Keep the platform JWT check enabled (the default). This function still verifies 
 
 ## Connect the browser panel
 
-The panel reads its configuration from `window.AKINLOWO_SUPABASE` at load time. Add a small runtime config **before** the `app.js` module tag:
+The panel reads its configuration from `window.AKINLOWO_SUPABASE` at load time. The app's `index.html` already carries this block (project `lytyxtzdkrpqtdregwsg`); a different host sets it **before** the `app.js` module tag:
 
 ```html
 <script>

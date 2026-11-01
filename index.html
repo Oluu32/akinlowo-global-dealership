@@ -127,6 +127,20 @@
 
   <dialog id="modal" class="modal"><div id="modal-content"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!--
+    Assistant sign-in config: this project's URL and its PUBLIC publishable key
+    (Supabase dashboard → Project Settings → API). A legacy anon key works too.
+    Never put the service_role or sb_secret_ key here: that one is server-only
+    and the panel refuses it. Remove or break this block and the panel falls
+    back to "Not configured" and sends nothing.
+  -->
+  <script>
+    window.AKINLOWO_SUPABASE = {
+      url: 'https://lytyxtzdkrpqtdregwsg.supabase.co',
+      anonKey: 'sb_publishable_3i1tcZxXNn05nRzXGwJVKQ_Co5LTVEY'
+    };
+  </script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

@@ -43,9 +43,9 @@ Cross rates follow the provider's USD-based table only: `NGN per 1 unit = rates.
 
 ## Dealership assistant
 
-The assistant is a real chat panel, but it is only enabled when a deployment wires it to the Supabase Edge Function in [`supabase/functions/dealership-assistant`](supabase/functions/dealership-assistant/README.md). This repository does not ship an endpoint address, a Supabase session or any key.
+The assistant is a real chat panel backed by the Supabase Edge Function in [`supabase/functions/dealership-assistant`](supabase/functions/dealership-assistant/README.md). This repository ships only the project URL and its public publishable key, in the runtime config near the foot of `index.html`. Until that function is deployed, the panel stays **Sign-in required** and any message reports **Unavailable**.
 
-- **No key in the browser.** The Groq key exists only as a server-side `GROQ_API_KEY` secret. Nothing key-shaped is committed, logged or sent to the client.
+- **No secret in the browser.** The only key in the client is Supabase's publishable key, which is public by design and grants nothing without a signed-in user. The Groq key exists only as the server-side `GROQ_API_KEY` secret; a `service_role` or `sb_secret_…` key is refused at startup. No model key is committed, logged or sent to the client.
 - **Verified authorization.** The function rejects missing, expired or anon-key tokens by verifying the caller with `auth.getUser`, supports an optional email allowlist, and applies an origin allowlist, per-user rate limits, input caps and safe error messages.
 - **No records leave the page.** The request body is only `{ messages: [{ role, content }] }` built from the words typed in the panel. Vehicles, sales, buyers, documents and storage are never read into it, and chat history is kept in memory only.
 - **Sign-in gate.** When the app is pointed at a Supabase project, the panel opens on a password sign-in form instead of the chat. The session lives in `sessionStorage` for that tab, refreshes shortly before expiry, and is cleared on sign-out or when the service rejects it. Passwords are never stored, reused or written to disk.
@@ -62,13 +62,16 @@ The assistant is a real chat panel, but it is only enabled when a deployment wir
 <script>
   window.AKINLOWO_SUPABASE = {
     url: 'https://<project-ref>.supabase.co',
+    // publishable key, or a legacy anon key; never service_role or sb_secret_
     anonKey: '<public anon / publishable key>'
     // assistantEndpoint: optional override; derived from the project URL otherwise
   };
 </script>
 ```
 
-The panel then shows the sign-in gate, derives the function endpoint, and refreshes the session itself. The anon key is a public client key; a `service_role` or `sb_secret_…` key is rejected at startup so it cannot be shipped by mistake.
+This repository already carries that block at the foot of `index.html` (project `lytyxtzdkrpqtdregwsg`); replace the URL and key if you fork it. No build step is involved.
+
+The panel then shows the sign-in gate, derives the function endpoint, and refreshes the session itself. A publishable or anon key is a public client key; a `service_role` or `sb_secret_…` key is rejected at startup so it cannot be shipped by mistake.
 
 A host that already manages sessions can skip the gate entirely by supplying the token itself:
 
