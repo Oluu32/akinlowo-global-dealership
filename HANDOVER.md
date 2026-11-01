@@ -90,8 +90,8 @@ curl -X PUT "https://<project-ref>.supabase.co/auth/v1/admin/users/<user-id>" \
    never receive mail — fine while you sign in by hand, but if you ever want email
    based resets, create the account with a real mailbox instead
    (**Authentication → Users → Add user**, and delete the old one).
-5. Delete the labelled **DEMO** vehicles once you are ready for real stock
-   (**Inventory → Delete**). They are clearly marked fictional records, not your data.
+5. Start with stock: the desk is empty by design, so add your first vehicle in
+   **Inventory → Add vehicle** (or leave it empty while you look around).
 6. Take a backup (see below) before you start entering real sales.
 7. If staff will use the desk, give each person their own login rather than sharing
    one — then you can delete a login when someone leaves.
@@ -172,8 +172,11 @@ before pushing if you change code.
   desk and forbidden from inventing records, but it sometimes describes buttons or
   screens that do not exist. Treat it as a hint, and check the actual screen. It
   cannot read or change your records.
-- **VAT here is arithmetic.** Rates and amounts are whatever you type; nothing is a
-  tax filing or advice. Invoices are not connected to government e-invoicing.
+- **VAT is off until you switch it on.** *Track VAT on this desk* in Settings is
+  unticked, so sales have no VAT field and Finance shows no VAT figures. If you do
+  charge VAT, tick it: the rate prefills each new sale and a sale's VAT is added only
+  when you tick its own box. Any VAT figure is arithmetic you typed, never a tax
+  filing or advice. Invoices are not connected to government e-invoicing.
 - **The site address is public**, so anyone can find the sign-in page. Security rests
   on the password and on Supabase's rate limits, which is why a long random password
   matters more than a short one.

@@ -49,6 +49,8 @@ test('normalizes any stored shape into the desk the views expect', () => {
   assert.equal(state.settings.vatRate, 7.5);
   assert.equal(state.extra, true);
   assert.deepEqual(state.counters, { invoice: 0, receipt: 0 });
+  assert.equal(state.settings.vatEnabled, false);
+  assert.equal(normalizeDeskState({ settings: { vatEnabled: true } }).settings.vatEnabled, true);
   assert.equal(normalizeDeskState(null).vehicles.length, 0);
 });
 

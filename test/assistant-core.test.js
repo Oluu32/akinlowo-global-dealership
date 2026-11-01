@@ -42,7 +42,9 @@ test('the prompt describes the controls the desk actually has', () => {
   assert.match(prompt, /Record payment \(shown only while a balance remains/);
   assert.match(prompt, /no search, sort, edit or send control/);
   assert.match(prompt, /every signed-in account reads and edits the same desk/);
-  assert.match(prompt, /restores the labelled demo vehicles/);
+  assert.match(prompt, /"Track VAT on this desk" switch that is off by default/);
+  assert.match(prompt, /deletes every vehicle, sale, document, expense and supplier/);
+  assert.equal(/demo/i.test(prompt), false);
 });
 
 test('validates a normal conversation and trims content', () => {

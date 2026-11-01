@@ -40,7 +40,11 @@ export function normalizeDeskState(value) {
   const counters = source.counters && typeof source.counters === 'object' ? source.counters : {};
   return {
     ...source,
-    settings: { ...settings, vatRate: Number.isFinite(Number(settings.vatRate)) ? Number(settings.vatRate) : 7.5 },
+    settings: {
+      ...settings,
+      vatEnabled: settings.vatEnabled === true,
+      vatRate: Number.isFinite(Number(settings.vatRate)) ? Number(settings.vatRate) : 7.5
+    },
     counters: { ...counters, invoice: Number(counters.invoice) || 0, receipt: Number(counters.receipt) || 0 },
     vehicles: list('vehicles'),
     sales: list('sales'),
