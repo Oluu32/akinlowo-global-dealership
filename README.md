@@ -2,6 +2,8 @@
 
 An original, sign-in-protected dealership management desk for Akinlowo Global Investments and Autos. The project uses public feature descriptions as broad workflow context and is independently implemented. It does not contain copied DealerBoss code, assets, screenshots, or customer examples.
 
+Taking over this project? Start with [HANDOVER.md](HANDOVER.md): accounts, access transfers, backups and the first-week checklist. It deliberately contains no passwords or keys.
+
 ## Run locally
 
 Requires Node.js 18+ for the tests. The app itself is static and has no install step. Serve the repository root with any static file server, for example:
@@ -68,7 +70,7 @@ Cross rates follow the provider's USD-based table only: `NGN per 1 unit = rates.
 
 - Support and terms were re-checked on 31 October 2026 against <https://www.exchangerate-api.com/docs/free>: the Open Access endpoint requires attribution, updates once per day and permits caching for personal or commercial conversion, but not re-distribution of the feed.
 - The panel therefore displays derived naira rates only, links the required "Rates By Exchange Rate API" attribution to <https://www.exchangerate-api.com>, and links the provider terms.
-- The response is cached in this browser for one hour under its own storage key; the rest of the app's data is untouched. A rate older than 36 hours, or one the provider has not refreshed on schedule, is labelled **Stale** and the last saved copy is clearly marked.
+- Rates are held in memory for the session only; nothing is written to browser storage. A rate older than 36 hours, or one the provider has not refreshed on schedule, is labelled **Stale** and the last loaded copy is clearly marked.
 - If the request fails, no rate is invented: the panel reports **Unavailable**, keeps the source and terms links, and offers a retry. If a saved copy exists it is shown with its real provider timestamp and labelled accordingly.
 - Rates are a display reference only. They are not used in invoices, receipts, sale totals, VAT or any other stored figure, and they are not a quote.
 
@@ -102,7 +104,7 @@ The assistant is a real chat panel backed by the Supabase Edge Function in [`sup
 
 This repository already carries that block at the foot of `index.html` (project `lytyxtzdkrpqtdregwsg`); replace the URL and key if you fork it. No build step is involved.
 
-The panel then shows the sign-in gate, derives the function endpoint, and refreshes the session itself. A publishable or anon key is a public client key; a `service_role` or `sb_secret_…` key is rejected at startup so it cannot be shipped by mistake.
+The desk's sign-in gate covers the panel too, so one sign-in opens both; the panel derives the function endpoint and refreshes the session itself. A publishable or anon key is a public client key; a `service_role` or `sb_secret_…` key is rejected at startup so it cannot be shipped by mistake.
 
 A host that already manages sessions can skip the gate entirely by supplying the token itself:
 
