@@ -8,3 +8,10 @@ node_modules/
 
 # Local Supabase CLI cache (created by `supabase functions deploy`)
 supabase/.temp/
+
+# Agent skills are installed locally with `npx skills add supabase/agent-skills`.
+# Re-install them instead of committing: this repo publishes every file on
+# `main` through GitHub Pages, and the skills are documentation for tooling,
+# not part of the desk.
+.agents/
+skills-lock.json
