@@ -2,47 +2,145 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#162b59">
-  <meta name="description" content="A local-first dealership management prototype for Akinlowo Global Investments and Autos.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e2244">
+  <meta name="description" content="A local-first dealership management desk for Akinlowo Global Investments and Autos.">
   <title>Akinlowo Global | Dealership desk</title>
   <link rel="icon" href="./assets/akinlowo-global-mark.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" aria-label="Main navigation">
       <a class="brand" href="#dashboard" aria-label="Akinlowo Global dashboard">
-        <img src="./assets/akinlowo-global-mark.svg" alt="" width="42" height="42">
-        <span><strong>Akinlowo Global</strong><small>dealership desk</small></span>
+        <span class="brand-plate">
+          <img src="./assets/akinlowo-global-mark.svg" alt="Akinlowo Global Investments and Autos" width="196" height="84">
+        </span>
+        <span class="brand-caption"><span class="status-dot"></span>Dealership desk</span>
       </a>
-      <p class="nav-caption">WORKSPACE</p>
+      <p class="nav-caption">Workspace</p>
       <nav class="nav-list">
-        <a href="#dashboard" data-route="dashboard"><span class="nav-icon">◫</span>Overview</a>
-        <a href="#inventory" data-route="inventory"><span class="nav-icon">▤</span>Inventory</a>
-        <a href="#sales" data-route="sales"><span class="nav-icon">↗</span>Sales</a>
-        <a href="#finance" data-route="finance"><span class="nav-icon">₦</span>Finance</a>
-        <a href="#suppliers" data-route="suppliers"><span class="nav-icon">◎</span>Suppliers</a>
-        <a href="#documents" data-route="documents"><span class="nav-icon">▧</span>Invoices &amp; receipts</a>
+        <a href="#dashboard" data-route="dashboard">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg></span>
+          <span class="nav-label">Overview</span>
+        </a>
+        <a href="#inventory" data-route="inventory">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l1.8-5A2 2 0 0 1 6.7 6.7h10.6a2 2 0 0 1 1.9 1.3L21 13"/><path d="M3 13h18v4.5a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1V17H6.5v.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><circle cx="7" cy="15.2" r=".9" fill="currentColor" stroke="none"/><circle cx="17" cy="15.2" r=".9" fill="currentColor" stroke="none"/></svg></span>
+          <span class="nav-label">Inventory</span>
+        </a>
+        <a href="#sales" data-route="sales">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16.5l5-5 3.5 3.5L20 8"/><path d="M20 12.5V8h-4.5"/></svg></span>
+          <span class="nav-label">Sales</span>
+        </a>
+        <a href="#finance" data-route="finance">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 5.5l5.5 6 5.5-6"/><path d="M9.2 8.6h5.6M9.2 11.6h5.6M12 11.6V19"/></svg></span>
+          <span class="nav-label">Finance</span>
+        </a>
+        <a href="#suppliers" data-route="suppliers">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3.1"/><path d="M3.6 19c.4-3.1 2.7-5 5.4-5s5 1.9 5.4 5"/><path d="M16.2 6.2a3 3 0 0 1 0 5.6M18.4 19c-.2-2.4-1.2-4.1-2.7-5"/></svg></span>
+          <span class="nav-label">Suppliers</span>
+        </a>
+        <a href="#documents" data-route="documents">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.6h6.5L18 8.1v12.3H7z"/><path d="M13.4 3.7V8h4.5M9.6 12.4h5.8M9.6 16h5.8"/></svg></span>
+          <span class="nav-label">Documents</span>
+        </a>
+        <a href="#settings" data-route="settings">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M12 3.4v2.2M12 18.4v2.2M3.4 12h2.2M18.4 12h2.2M5.9 5.9l1.6 1.6M16.5 16.5l1.6 1.6M18.1 5.9l-1.6 1.6M7.5 16.5l-1.6 1.6"/></svg></span>
+          <span class="nav-label">Settings</span>
+        </a>
       </nav>
       <div class="sidebar-bottom">
-        <a href="#settings" data-route="settings"><span class="nav-icon">⚙</span>Settings</a>
-        <div class="local-note"><span class="status-dot"></span><span>Saved on this device<small>Local demo · no account sync</small></span></div>
+        <div class="local-note"><span class="status-dot"></span><span>Saved on this device<small>Local records · no account sync</small></span></div>
       </div>
     </aside>
 
-    <main class="main-area">
+    <div class="main-area">
       <header class="topbar">
-        <div><p class="eyebrow" id="today-label"></p><h1 id="page-title">Overview</h1></div>
-        <div class="top-actions"><span class="currency-badge">NGN <b>₦</b></span><button class="button button-primary" data-action="new-sale">＋ New sale</button></div>
+        <a class="mobile-brand" href="#dashboard" aria-label="Akinlowo Global dashboard">
+          <img src="./assets/akinlowo-global-mark.svg" alt="Akinlowo Global Investments and Autos" width="168" height="72">
+        </a>
+        <div class="topbar-title">
+          <p class="eyebrow" id="today-label"></p>
+          <h1 id="page-title">Overview</h1>
+        </div>
+        <div class="top-actions">
+          <span class="currency-badge">NGN <b>₦</b></span>
+          <button class="button button-primary" data-action="new-sale">＋ New sale</button>
+        </div>
       </header>
-      <section id="view" class="page-content" aria-live="polite"></section>
-      <footer class="footer-note">Local-first prototype · figures stay in this browser · review records before relying on them</footer>
-    </main>
+      <main id="view" class="page-content" aria-live="polite"></main>
+      <footer class="footer-note">Local-first prototype · records stay in this browser · review figures before relying on them</footer>
+    </div>
   </div>
+
+  <nav class="tabbar" aria-label="Primary navigation">
+    <div class="tabbar-inner">
+      <a href="#dashboard" data-route="dashboard"><span class="tab-icon" aria-hidden="true">◫</span><span>Overview</span></a>
+      <a href="#inventory" data-route="inventory"><span class="tab-icon" aria-hidden="true">▤</span><span>Stock</span></a>
+      <a href="#sales" data-route="sales"><span class="tab-icon" aria-hidden="true">↗</span><span>Sales</span></a>
+      <a href="#finance" data-route="finance"><span class="tab-icon" aria-hidden="true">₦</span><span>Finance</span></a>
+      <a href="#suppliers" data-route="suppliers"><span class="tab-icon" aria-hidden="true">◎</span><span>Suppliers</span></a>
+      <a href="#documents" data-route="documents"><span class="tab-icon" aria-hidden="true">▧</span><span>Docs</span></a>
+      <a href="#settings" data-route="settings"><span class="tab-icon" aria-hidden="true">⚙</span><span>Settings</span></a>
+    </div>
+  </nav>
+
+  <button class="assistant-fab" type="button" data-action="toggle-assistant" aria-expanded="false" aria-controls="assistant-panel" aria-label="Open the assistant panel (not configured)">
+    <span class="assistant-fab-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12.2c0 3.7-3.6 6.7-8 6.7a9.3 9.3 0 0 1-2.7-.4L5 20l1-3.2a6.2 6.2 0 0 1-2-4.6c0-3.7 3.6-6.7 8-6.7s8 3 8 6.7z"/><path d="M9 11.6h.01M12 11.6h.01M15 11.6h.01"/></svg>
+    </span>
+    <span class="assistant-fab-text">Assistant</span>
+  </button>
+
+  <section class="assistant-panel" id="assistant-panel" role="dialog" aria-modal="false" aria-labelledby="assistant-title" hidden>
+    <header class="assistant-head">
+      <span class="assistant-avatar" aria-hidden="true">AG</span>
+      <div class="assistant-ident">
+        <h2 id="assistant-title">Dealership assistant</h2>
+        <p><span class="assistant-state is-off" id="assistant-status">Checking</span> <span class="assistant-status-note" id="assistant-status-note">Checking this deployment…</span></p>
+      </div>
+      <button class="assistant-signout" id="assistant-signout" type="button" hidden>Sign out</button>
+      <button class="icon-button" type="button" data-action="close-assistant" aria-label="Close assistant panel">×</button>
+    </header>
+    <div class="assistant-body" id="assistant-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+    <section class="assistant-auth" id="assistant-auth" aria-label="Assistant sign-in" hidden>
+      <p class="assistant-auth-lead">Sign in to use the assistant. Your dealership records stay in this browser and are never sent with a message.</p>
+      <form class="assistant-auth-form" id="assistant-auth-form">
+        <label for="assistant-email">Email</label>
+        <input class="input" id="assistant-email" name="email" type="email" autocomplete="username" required>
+        <label for="assistant-password">Password</label>
+        <input class="input" id="assistant-password" name="password" type="password" autocomplete="current-password" required>
+        <button class="button button-primary" id="assistant-auth-submit" type="submit">Sign in</button>
+      </form>
+      <p class="assistant-auth-error" id="assistant-auth-error" role="alert" hidden></p>
+      <p class="assistant-auth-note">Accounts are managed in the dealership's Supabase project. The password goes only to that project and is never stored by this app.</p>
+    </section>
+    <div class="assistant-suggestions" id="assistant-suggestions" aria-label="Suggested questions" hidden></div>
+    <form class="assistant-compose" id="assistant-form" autocomplete="off">
+      <textarea class="input assistant-input" id="assistant-input" name="message" rows="1" maxlength="1200" placeholder="Messaging is disabled — assistant not configured" aria-label="Message to the dealership assistant"></textarea>
+      <button class="button button-primary" id="assistant-send" type="submit" disabled>Send</button>
+    </form>
+    <p class="assistant-note" id="assistant-privacy">Only the words you type are sent to the assistant service · saved records never leave this browser · replies can be wrong, so check figures before acting</p>
+  </section>
+
   <dialog id="modal" class="modal"><div id="modal-content"></div></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!--
+    Assistant sign-in config: this project's URL and its PUBLIC publishable key
+    (Supabase dashboard → Project Settings → API). A legacy anon key works too.
+    Never put the service_role or sb_secret_ key here: that one is server-only
+    and the panel refuses it. Remove or break this block and the panel falls
+    back to "Not configured" and sends nothing.
+  -->
+  <script>
+    window.AKINLOWO_SUPABASE = {
+      url: 'https://lytyxtzdkrpqtdregwsg.supabase.co',
+      anonKey: 'sb_publishable_3i1tcZxXNn05nRzXGwJVKQ_Co5LTVEY'
+    };
+  </script>
   <script type="module" src="./app.js"></script>
-  <script type="module" src="./vat-default.js"></script>
 </body>
 </html>
